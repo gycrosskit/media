@@ -2,6 +2,10 @@
 
 HarmonyOS 图片选择、系统拍照、可选 JPEG 压缩与保存相册的 Kuikly Module。
 
+```shell
+ohpm install @gycrosskit/media
+```
+
 ```typescript
 import { MediaModule } from '@gycrosskit/media';
 ```
