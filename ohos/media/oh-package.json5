@@ -1,0 +1,13 @@
+{
+  "name": "@gycrosskit/media",
+  "version": "0.1.0",
+  "description": "HarmonyOS 图片选择、拍照、压缩和相册保存",
+  "main": "Index.ets",
+  "author": {
+    "name": "gycrosskit",
+    "url": "https://github.com/gycrosskit/media"
+  },
+  "repository": "https://github.com/gycrosskit/media",
+  "license": "Apache-2.0",
+  "dependencies": { "@kuikly-open/render": "2.28.0" }
+}
