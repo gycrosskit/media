@@ -1,0 +1,7 @@
+{
+  "module": {
+    "name": "MediaNative",
+    "type": "har",
+    "deviceTypes": ["default", "tablet"]
+  }
+}
