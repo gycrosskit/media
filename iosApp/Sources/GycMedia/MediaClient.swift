@@ -10,6 +10,9 @@ public final class MediaClient: NSObject {
     /// 系统相机/相册一次只能展示一个，进程内复用同一 Bridge 并以请求 ID 隔离迟到回调。
     public static let shared = MediaClient()
 
+    /// 多前台窗口或自定义容器由宿主返回所属页面；在主线程配置，返回 nil 表示当前无法展示。
+    public var presenterResolver: (() -> UIViewController?)?
+
     private struct PickerRequest {
         let id = UUID()
         let callback: MediaPickerCallback
@@ -17,10 +20,13 @@ public final class MediaClient: NSObject {
     }
 
     private var pickerRequest: PickerRequest?
+    private var latestPickerRequestId: UUID?
     private var pickerController: UIViewController?
     /// 多次替换只保留最新展示动作，旧 dismiss 完成后再执行。
     private var pendingPresentation: (() -> Void)?
     private var isDismissingPicker = false
+    private var isPresentingPicker = false
+    private var pendingDismissal: (() -> Void)?
 
     private override init() {
         super.init()
@@ -41,7 +47,6 @@ public final class MediaClient: NSObject {
                 callback.onFailed(message: "Invalid media request")
                 return
             }
-            cancelImagePicker()
             let request = PickerRequest(
                 callback: callback,
                 compression: maxDimension > 0 && jpegQuality > 0
@@ -51,19 +56,22 @@ public final class MediaClient: NSObject {
                     )
                     : nil
             )
+            latestPickerRequestId = request.id
+            cancelImagePicker()
+            // 旧终态回调可能同步发起新请求；重入的新请求拥有展示权。
+            guard latestPickerRequestId == request.id else {
+                callback.onCancelled()
+                return
+            }
             pickerRequest = request
             pendingPresentation = { [weak self] in
                 guard let self, self.pickerRequest?.id == request.id else { return }
-                guard let presenter = UIKitPresentationContext.topViewController() else {
-                    self.finishPicker(error: "无法获取当前页面")
-                    return
-                }
                 if source == 0 {
                     guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
                         self.finishPicker(error: "当前设备不支持相机")
                         return
                     }
-                    self.requestCameraAccess(requestId: request.id, presenter: presenter)
+                    self.requestCameraAccess(requestId: request.id)
                     return
                 }
                 var configuration = PHPickerConfiguration(photoLibrary: .shared())
@@ -72,8 +80,7 @@ public final class MediaClient: NSObject {
                 configuration.preferredAssetRepresentationMode = .current
                 let picker = PHPickerViewController(configuration: configuration)
                 picker.delegate = self
-                self.pickerController = picker
-                presenter.present(picker, animated: true)
+                self.presentPicker(picker, requestId: request.id)
             }
             presentPendingPickerIfReady()
         }
@@ -84,6 +91,44 @@ public final class MediaClient: NSObject {
         let presentation = pendingPresentation
         pendingPresentation = nil
         presentation?()
+    }
+
+    private func presentPicker(_ picker: UIViewController, requestId: UUID, canRetry: Bool = true) {
+        guard pickerRequest?.id == requestId else { return }
+        let presenter: UIViewController?
+        if let resolver = presenterResolver {
+            presenter = UIKitPresentationContext.topViewController(from: resolver())
+        } else {
+            presenter = UIKitPresentationContext.topViewController()
+        }
+        guard let presenter else {
+            finishPicker(error: "无法获取当前页面")
+            return
+        }
+        let retry = { (canRetry: Bool) in
+            DispatchQueue.main.async { self.presentPicker(picker, requestId: requestId, canRetry: canRetry) }
+        }
+        if let coordinator = presenter.transitionCoordinator {
+            if coordinator.animate(alongsideTransition: nil, completion: { _ in retry(true) }) { return }
+            if canRetry { retry(false); return }
+        }
+        guard let view = presenter.viewIfLoaded, view.window != nil, !view.isHidden, view.alpha > 0 else {
+            finishPicker(error: "当前页面不可见")
+            return
+        }
+        if presenter.isBeingPresented || presenter.isBeingDismissed {
+            if canRetry { retry(false) } else { finishPicker(error: "当前页面正在转场") }
+            return
+        }
+        pickerController = picker
+        isPresentingPicker = true
+        // PHPicker 可能先排队、尚未建立 UIKit 转场属性；等 present completion 后再关闭旧请求。
+        presenter.present(picker, animated: true) {
+            self.isPresentingPicker = false
+            let dismissal = self.pendingDismissal
+            self.pendingDismissal = nil
+            dismissal?()
+        }
     }
 
     /// 取消当前系统 Picker 并清空所有请求状态；重复调用保持幂等。
@@ -178,11 +223,14 @@ public final class MediaClient: NSObject {
             pendingPresentation = nil
             if let controller {
                 isDismissingPicker = true
-                UIKitPresentationContext.dismiss(controller, animated: true) {
-                    self.isDismissingPicker = false
-                    completion(request.callback)
-                    self.presentPendingPickerIfReady()
+                let dismiss = {
+                    UIKitPresentationContext.dismiss(controller, animated: true) {
+                        self.isDismissingPicker = false
+                        completion(request.callback)
+                        self.presentPendingPickerIfReady()
+                    }
                 }
+                if isPresentingPicker { pendingDismissal = dismiss } else { dismiss() }
             } else {
                 completion(request.callback)
             }
@@ -190,20 +238,20 @@ public final class MediaClient: NSObject {
     }
 
     /** 系统拍照与共享扫码权限语义保持一致；拒绝后不再尝试展示无权限的相机控制器。 */
-    private func requestCameraAccess(requestId: UUID, presenter: UIViewController) {
+    private func requestCameraAccess(requestId: UUID) {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
-            presentCamera(requestId: requestId, presenter: presenter)
+            presentCamera(requestId: requestId)
         case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .video) { [weak self, weak presenter] granted in
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 guard let self else { return }
                 UIKitExecutionContext.run {
                     guard self.pickerRequest?.id == requestId else { return }
-                    guard granted, let presenter else {
+                    guard granted else {
                         self.denyPickerPermission(restricted: false)
                         return
                     }
-                    self.presentCamera(requestId: requestId, presenter: presenter)
+                    self.presentCamera(requestId: requestId)
                 }
             }
         case .denied:
@@ -216,14 +264,13 @@ public final class MediaClient: NSObject {
     }
 
     /// 授权回调必须匹配当前请求 ID，旧请求不能拉起新的相机页面。
-    private func presentCamera(requestId: UUID, presenter: UIViewController) {
+    private func presentCamera(requestId: UUID) {
         guard pickerRequest?.id == requestId else { return }
         let picker = UIImagePickerController()
         picker.sourceType = .camera
         picker.mediaTypes = [UTType.image.identifier]
         picker.delegate = self
-        pickerController = picker
-        presenter.present(picker, animated: true)
+        presentPicker(picker, requestId: requestId)
     }
 
     /// 使用原始编码写入照片库，避免把二维码重新压缩后降低识别清晰度。

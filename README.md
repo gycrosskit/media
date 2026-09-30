@@ -25,9 +25,9 @@ repositories {
     mavenCentral()
     maven("https://mirrors.tencent.com/nexus/repository/maven-public/")
 }
-commonMain.dependencies { implementation("com.github.gycrosskit.media:media-core:0.1.0") }
+commonMain.dependencies { implementation("com.github.gycrosskit.media:media-core:0.1.1") }
 // Kuikly 的 OHOS 模块：
-ohosArm64Main.dependencies { implementation("com.github.gycrosskit.media:media-kuikly:0.1.0") }
+ohosArm64Main.dependencies { implementation("com.github.gycrosskit.media:media-kuikly:0.1.1") }
 ```
 
 构建使用 Kotlin `2.2.21-1.0.0`、coroutines `1.10.2-1.0.0`，Kuikly `2.28.0-2.0.21-ohos`。使用 OHOS target 的宿主需要匹配的 Kotlin 工具链。
@@ -57,11 +57,13 @@ AAR 自动合并 FileProvider `${applicationId}.gycrosskit.media`，只暴露应
 
 ## iOS
 
-Swift Package URL `https://github.com/gycrosskit/media`，版本 `0.1.0`，产品 `GycMedia`。直接原生接入使用 `MediaClient.shared` 和 `MediaPickerCallback / MediaSaveCallback`。
+Swift Package URL `https://github.com/gycrosskit/media`，版本 `0.1.1`，产品 `GycMedia`。直接原生接入使用 `MediaClient.shared` 和 `MediaPickerCallback / MediaSaveCallback`。
 
 KMP 宿主将 `media-core` 导出到自己的 Framework，然后加入 `iosApp/KmpMediaBridge.swift`，把 `import MediaCore` 改成宿主 Framework 名。将 `KmpMediaBridge` 实例传给 `IosImagePickerPlatform` / `IosImageSavePlatform`。
 
-Info.plist 配置 `NSCameraUsageDescription` 和 `NSPhotoLibraryAddUsageDescription`；说明文案由宿主提供。PHPicker 无需读取整库权限；保存仅请求 `.addOnly`。多窗口宿主当前选择 foregroundActive 场景的 key window；同时显示多个前台场景的应用应自行提供展示上下文。无压缩选图保留原始编码；系统相机只提供 UIImage 时会编码为质量 1 的 JPEG。
+Info.plist 配置 `NSCameraUsageDescription` 和 `NSPhotoLibraryAddUsageDescription`；说明文案由宿主提供。PHPicker 无需读取整库权限；保存仅请求 `.addOnly`。默认从 foregroundActive 场景的 key window 递归查找 presented、Navigation、Tab、Split 和可见自定义 child。多个前台窗口或无法按可见 child 判定活动页的自定义容器，在主线程设置 `MediaClient.shared.presenterResolver = { [weak page] in page }`，返回 nil 时本次选择失败；仍共用同一 Picker 请求所有权。
+
+未展示的 UIViewController 关闭回调立即完成；PHPicker 已交给 UIKit 排队展示时，组件等它完成展示再关闭，期间保留最新待展示请求。Picker 或宿主页处于展示/关闭转场时，在转场结束后的下一轮主队列重新解析并检查；隐藏或不在 window 内的展示页面直接失败。连续替换只展示最新请求，旧页面关闭和迟到回调不会关闭新 Picker。无压缩选图保留原始编码；系统相机只提供 UIImage 时会编码为质量 1 的 JPEG。
 
 ## HarmonyOS
 
@@ -77,6 +79,8 @@ JSON/Base64 桥每次原图合计上限 32 MiB（压缩前检查），超限返�
 
 执行 `scripts/verify.sh` 编译 Android/iOS/OHOS，跑公共 API 单测，检查 Swift 原生和 KMP 接线。HAR：`ohos/` 执行 `ohpm install --all` 后 `hvigorw --mode module -p module=MediaNative@default -p product=default assembleHar --no-daemon`。
 
-Maven 由 macOS 执行 `publishAllPublicationsToReleaseRepository`，默认产物位于 `build/release-maven`。以 `COPYFILE_DISABLE=1 tar` 打包到 GitHub Release 的 `media-maven.tar.gz`，`jitpack-install.sh` 校验 SHA-256 再安装。标签不可变，不在仓库提交 Maven 二进制目录。
+iOS Picker 最小回归检查：启动一个 iOS Simulator 后执行 `bash scripts/verify-ios-picker.sh`（多台启动时用 `MEDIA_SIMULATOR=<设备 ID>` 指定）。脚本独立编译 Swift module 和消费应用，在 Simulator 检查未展示取消、Picker/宿主页的真实 UIKit 展示/关闭转场、连续替换、迟到 delegate、回调重入、容器查找及无可见 presenter 的失败；无需 Gradle，不代替真机相机/权限/相册验收。
+
+Maven 由 macOS 执行 `publishAllPublicationsToReleaseRepository`，默认产物位于 `build/release-maven`。使用 `python3 release-pack.py build/release-maven build/release/media-maven.tar.gz 0.1.1` 只打包当前版本并排除 macOS AppleDouble，写入 `release-checksums.txt` 后上传 GitHub Release 的 `media-maven.tar.gz`，`jitpack-install.sh` 校验 SHA-256 再安装。标签不可变，不在仓库提交 Maven 二进制目录。
 
 本地已验证 Android 编译与单测、iOS Simulator Framework 链接及 Swift typecheck、OHOS KLIB 编译和 HAR 构建。尚未做 Android/iOS/HarmonyOS 真机的授权、系统选择器、相册写入和大图内存验收。各远程渠道状态见 Release 说明，ohpm 审核提交不等于上架。
