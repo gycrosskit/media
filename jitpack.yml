@@ -1,4 +1,4 @@
 jdk:
   - openjdk17
 install:
-  - bash jitpack-install.sh
+  - bash jitpack-install.sh media
