@@ -6,4 +6,4 @@
 - 8 个 Gradle Module Metadata / 20 个产物引用校验通过；使用共用 Python tarfile 发布脚本排除 AppleDouble，归档只包含 0.1.1。
 - Swift / Maven 标签候选 0.1.1，OHPM 保持 0.1.0，因为此次原生改动仅影响 iOS。
 
-远程发布/消费验证在版本发布后另行记录。未执行真机相机、权限、选图/保存相册、大图内存与生产业务验收。
+远程发布/消费结果已记录在 [0.1.1 Release](https://github.com/gycrosskit/media/releases/tag/0.1.1)，当前接入版本与核对范围见 [开发与验证](docs/开发与验证.md)。未执行真机相机、权限、选图/保存相册、大图内存与生产业务验收。
