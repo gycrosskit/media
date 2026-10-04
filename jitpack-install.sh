@@ -11,4 +11,4 @@ echo "$checksum  $archive" | sha256sum -c -
 mkdir -p "$HOME/.m2/repository" build/release-maven
 tar -xzf "$archive" -C "$HOME/.m2/repository"
 tar -xzf "$archive" -C build/release-maven
-python3 jitpack-metadata.py "$HOME/.m2/repository/com/github/gycrosskit/${repository}" "build/release-maven/com/github/gycrosskit/${repository}"
+# metadata 与校验文件已在归档前修复并验证，安装不再改写产物。
