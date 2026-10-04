@@ -5,6 +5,19 @@
 Maven/Swift Package 0.1.2 已提供为预发行；默认 JitPack 全平台消费与 exact SPM iOS SDK 独立编译/链接通过。
 HAR 0.1.2 已以 next 提交审核，registry 正式 latest 仍为 0.1.0。历史 Maven/Swift 0.1.1 和 HAR 0.1.0 保留。
 
+## HAR 0.1.3 发布候选
+
+拍照/保存临时路径改用实例 UUID 加请求序号，防止同毫秒跨页面覆盖或清理另一请求文件。目录、finally 释放和桥接契约保持。
+
+| 渠道 | 本轮消费版本 | 状态 |
+| --- | --- | --- |
+| HarmonyOS HAR | 0.1.3 | 待发布和真实 Release/Registry 消费 |
+| Maven core/Kuikly | 0.1.2 | 生产 Kotlin 未变，沿用已验精确远程版本 |
+| Swift Package GycMedia | 0.1.2 | 原生 Swift 未变，沿用已验精确消费版本 |
+
+0.1.3 标签只发布更新后的 HAR，不提供 Maven 0.1.3；JitPack 使用 Maven 0.1.2。
+
+
 ## 平台与要求
 
 | 平台 | 接入方式 | 系统要求 |
@@ -40,11 +53,11 @@ ohosArm64Main.dependencies {
 
 iOS 在 Xcode 的 Package Dependencies 添加 `https://github.com/gycrosskit/media.git`，选择精确版本 `0.1.2`，产品 `GycMedia`。KMP 不自动导入该 Swift Package，桥接步骤见接入指南。
 
-HarmonyOS 原生包独立安装；Kotlin Module 与 HAR 0.1.2 需成对更新。以下 registry 命令需等待审核可见；
-审核期间保留旧配对 Maven 0.1.1/HAR 0.1.0，或从 0.1.2 Release 下载并校验 HAR 后本地安装：
+HarmonyOS 原生包独立安装；本轮使用已验 Maven 0.1.2 配合 HAR 0.1.3，桥接契约兼容。以下 registry 命令需等待审核可见；
+审核期间可使用既有 Maven/HAR 0.1.2 配对，或从对应 Release 下载并校验 HAR 后本地安装：
 
 ```sh
-ohpm install @gycrosskit/media@0.1.2
+ohpm install @gycrosskit/media@0.1.3
 ```
 
 ## 最小使用
@@ -91,3 +104,5 @@ iOS/HarmonyOS 按系统图像解码能力识别格式。不提供视频、上传
 - [版本与发行说明](https://github.com/gycrosskit/media/releases)、[问题反馈](https://github.com/gycrosskit/media/issues)。
 
 组件源码使用 Apache-2.0，见 [LICENSE](LICENSE)。Kuikly 和平台 SDK 遵循各自许可。
+
+本轮制品校验与远程状态见 [0.1.3 发布验收](docs/发布验收-0.1.3.md)。
