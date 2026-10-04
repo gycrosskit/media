@@ -2,7 +2,8 @@
 
 系统选图、拍照、可选 JPEG 压缩和保存相册。返回图片编码字节、文件名与 MIME；上传、业务大小限制和页面提示由宿主负责。
 
-当前源码为 0.1.2 候选，尚未发布；下方新坐标需等待发布完成。既有正式 Maven/Swift 0.1.1、HAR 0.1.0 保持。
+Maven/Swift Package 0.1.2 已提供为预发行；默认 JitPack 全平台消费与 exact SPM iOS SDK 独立编译/链接通过。
+HAR 0.1.2 已以 next 提交审核，registry 正式 latest 仍为 0.1.0。历史 Maven/Swift 0.1.1 和 HAR 0.1.0 保留。
 
 ## 平台与要求
 
@@ -39,7 +40,8 @@ ohosArm64Main.dependencies {
 
 iOS 在 Xcode 的 Package Dependencies 添加 `https://github.com/gycrosskit/media.git`，选择精确版本 `0.1.2`，产品 `GycMedia`。KMP 不自动导入该 Swift Package，桥接步骤见接入指南。
 
-HarmonyOS 原生包独立安装；本轮 Maven/Swift/HAR 候选统一为 0.1.2，以下命令在候选发布完成后使用：
+HarmonyOS 原生包独立安装；Kotlin Module 与 HAR 0.1.2 需成对更新。以下 registry 命令需等待审核可见；
+审核期间保留旧配对 Maven 0.1.1/HAR 0.1.0，或从 0.1.2 Release 下载并校验 HAR 后本地安装：
 
 ```sh
 ohpm install @gycrosskit/media@0.1.2
