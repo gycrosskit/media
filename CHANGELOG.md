@@ -6,11 +6,11 @@
 
 | 渠道 | 本轮消费版本 | 状态 |
 | --- | --- | --- |
-| HarmonyOS HAR | 0.1.3 | 待发布和真实 Release/Registry 消费 |
+| HarmonyOS HAR | 0.1.3 | 已发布且下载 SHA/API22 独立编译通过；Registry 审核中 |
 | Maven core/Kuikly | 0.1.2 | 生产 Kotlin 未变，沿用已验精确远程版本 |
 | Swift Package GycMedia | 0.1.2 | 原生 Swift 未变，沿用已验精确消费版本 |
 
 0.1.3 标签只发布更新后的 HAR，不提供 Maven 0.1.3；JitPack 使用 Maven 0.1.2。
 
 
-历史版本与验证范围见 [Releases](https://github.com/gycrosskit/media/releases)；候选状态在完成本轮验证后更新。
+历史版本与验证范围见 [Releases](https://github.com/gycrosskit/media/releases)；真实消费与 Registry 状态见本轮发布验收。
