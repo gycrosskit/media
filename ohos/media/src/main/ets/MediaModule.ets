@@ -43,6 +43,7 @@ export class MediaModule extends KuiklyRenderBaseModule {
   private destroyed: boolean = false;
   private picking: boolean = false;
   private sequence: number = 0;
+  private readonly identifier: string = util.generateRandomUUID(true);
   private base64: util.Base64Helper = new util.Base64Helper();
   private readonly requests: Map<string, PendingMediaRequest> = new Map();
 
@@ -242,7 +243,8 @@ export class MediaModule extends KuiklyRenderBaseModule {
   private tempPath(extension: string): string {
     const context = this.controller?.getUIAbilityContext();
     if (!context) { throw new Error('Media host unavailable'); }
-    return `${context.cacheDir}/media_${Date.now()}_${this.sequence++}.${extension}`;
+    // 多页面 Module 共用 cacheDir；时间戳加实例内序号不能隔离同毫秒请求。
+    return `${context.cacheDir}/media_${this.identifier}_${this.sequence++}.${extension}`;
   }
 
   private async removeTemp(path: string): Promise<void> {

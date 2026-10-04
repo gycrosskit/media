@@ -10,6 +10,7 @@ const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 }
 }).outputText;
 const MAX_BYTES = 32 * 1024 * 1024;
+let nextIdentifier = 0;
 const deferred = () => {
   let resolve, reject;
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
@@ -61,13 +62,13 @@ function fixture(options = {}) {
       write: async (fd, bytes) => { events.written.push(files.get(fd)); return bytes.byteLength; },
       unlink: async value => { events.removed.push(value); }
     } },
-    '@kit.ArkTS': { util: { Base64Helper: class {
+    '@kit.ArkTS': { util: { generateRandomUUID: () => `instance-${++nextIdentifier}`, Base64Helper: class {
       decodeSync(value) { events.decoded++; return Uint8Array.from(Buffer.from(value, 'base64')); }
       encodeToStringSync(bytes) { events.encoded.push(bytes); return 'BwcH'; }
     } } },
     '@kit.BasicServicesKit': {}
   };
-  vm.runInNewContext(compiled, { exports, require: name => {
+  vm.runInNewContext(compiled, { exports, Date: class extends Date { static now() { return 1000; } }, require: name => {
     assert.ok(mocks[name], `unexpected import ${name}`); return mocks[name];
   } });
   return { module: new exports.MediaModule(), events };
@@ -79,6 +80,17 @@ function invoke(module, method, args) {
 }
 function cancel(module, requestId) { module.call('cancel', JSON.stringify({ requestId }), null); }
 const pick = requestId => ({ requestId, source: 'GALLERY', maxCount: 1, maxDimension: 0, jpegQuality: 0 });
+
+test('two Module instances at the same millisecond own different temporary files', async () => {
+  const first = fixture(), second = fixture();
+  const a = invoke(first.module, 'save', { requestId: 'a', data: 'BwcH' });
+  const b = invoke(second.module, 'save', { requestId: 'b', data: 'BwcH' });
+  await flush();
+  assert.equal(a[0].status, 'saved');
+  assert.equal(b[0].status, 'saved');
+  assert.notEqual(first.events.removed[0], second.events.removed[0]);
+  assert.ok(first.events.removed[0].startsWith('/cache/media_instance-'));
+});
 
 test('uncompressed selection keeps original bytes and releases native handles', async () => {
   const { module, events } = fixture();
