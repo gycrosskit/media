@@ -28,6 +28,80 @@ HAR 0.1.2 已以 next 提交审核，registry 正式 latest 仍为 0.1.0。历�
 
 KMP 使用 Kotlin `2.2.21-1.0.0`、coroutines `1.10.2-1.0.0`，Kuikly 使用 `2.28.0-2.0.21-ohos`；OHOS 宿主需匹配工具链。
 
+## 架构与调用流程
+
+`media-core` 定义选图与保存契约，平台实现负责系统 UI、编码读取及资源收尾。iOS KMP 需要宿主接线 Swift bridge；HarmonyOS Kotlin Module 与 ArkTS Module 同名，分属不同产物。
+
+```mermaid
+flowchart TB
+    Host[宿主] --> Core[media-core<br/>ImagePickerPlatform<br/>ImageSavePlatform]
+    Core --> Android[Android<br/>Picker / Saver]
+    Android --> AndroidSystem[ActivityResult<br/>MediaStore]
+    Core --> IOS[iOS Picker / Saver<br/>IosMediaSdkBridge]
+    IOS --> Bridge[宿主<br/>KmpMediaBridge]
+    Bridge --> Swift[GycMedia<br/>MediaClient]
+    Swift --> Apple[PhotosUI<br/>UIImagePickerController<br/>Photos]
+    Core --> Module[media-kuikly<br/>MediaModule]
+    Module --> Native[HAR<br/>ArkTS MediaModule]
+    Native --> Harmony[cameraPicker<br/>photoAccessHelper<br/>ImageKit]
+```
+
+HarmonyOS 选图使用 requestId 隔离等待与取消；正常结果返回编码字节，宿主决定下一步保存或上传。取消不能强制关闭系统 Picker，原生操作仍需在退出时释放自己的资源。
+
+```mermaid
+sequenceDiagram
+    participant Host as Kuikly 页面
+    participant Module as Kotlin MediaModule
+    participant Native as ArkTS MediaModule
+    participant System as 系统 Picker
+    Host->>Module: pick(request)
+    Module->>Native: pick(requestId, source, compression)
+    Native->>System: 打开相机或图库
+    alt 系统完成且请求仍有效
+        System-->>Native: 图片 URI
+        Native->>Native: 读取；按需压缩；检查大小；编码 Base64
+        Native-->>Module: selected / 权限结果 / cancelled / failed
+        Module->>Module: 校验数量与 32 MiB 限额，解码
+        Module-->>Host: ImagePickerResult
+    else 协程取消或页面 dispose
+        Module->>Native: cancel(requestId)
+        Native->>Native: 结算本次等待，阻止后续读写
+        Module->>Module: 移除回调，阻止迟交付
+        Note over Native,System: 系统页面仍可能返回；所属操作退出时 finally 释放资源
+    end
+```
+
+类图聚焦两种公共能力及选图实现；iOS saver 同样使用 `IosMediaSdkBridge`，Android saver 直接调用 MediaStore。
+
+```mermaid
+classDiagram
+    class ImagePickerPlatform {
+        <<interface>>
+        +pick(request) ImagePickerResult
+        +dispose()
+    }
+    class ImageSavePlatform {
+        <<interface>>
+        +save(request) ImageSaveResult
+    }
+    class AndroidImagePickerPlatform
+    class IosImagePickerPlatform
+    class IosMediaSdkBridge {
+        <<interface>>
+        +pickImages(source, maxCount, maxDimension, jpegQuality, callback)
+        +cancelImagePicker()
+        +saveImage(data, fileNamePrefix, callback)
+    }
+    class MediaModule
+    ImagePickerPlatform <|.. AndroidImagePickerPlatform
+    ImagePickerPlatform <|.. IosImagePickerPlatform
+    ImagePickerPlatform <|.. MediaModule
+    ImageSavePlatform <|.. MediaModule
+    IosImagePickerPlatform --> IosMediaSdkBridge : 持有
+```
+
+源码：[选图契约](media-core/src/commonMain/kotlin/io/github/gycrosskit/media/ImagePickerPlatform.kt)、[保存契约](media-core/src/commonMain/kotlin/io/github/gycrosskit/media/ImageSavePlatform.kt)、[Android Picker](media-core/src/androidMain/kotlin/io/github/gycrosskit/media/AndroidImagePickerPlatform.kt)、[Android Saver](media-core/src/androidMain/kotlin/io/github/gycrosskit/media/AndroidImageSavePlatform.kt)、[iOS Picker](media-core/src/iosMain/kotlin/io/github/gycrosskit/media/IosImagePickerPlatform.kt)、[iOS Saver](media-core/src/iosMain/kotlin/io/github/gycrosskit/media/IosImageSavePlatform.kt)、[iOS bridge 契约](media-core/src/iosMain/kotlin/io/github/gycrosskit/media/IosMediaSdkBridge.kt)、[宿主 bridge 示例](iosApp/KmpMediaBridge.swift)、[Swift MediaClient](iosApp/Sources/GycMedia/MediaClient.swift)、[Kotlin MediaModule](media-kuikly/src/commonMain/kotlin/io/github/gycrosskit/media/kuikly/MediaModule.kt)、[ArkTS MediaModule](ohos/media/src/main/ets/MediaModule.ets)。
+
 ## 安装
 
 ```kotlin
