@@ -5,13 +5,13 @@
 Maven/Swift Package 0.1.2 已提供为预发行；默认 JitPack 全平台消费与 exact SPM iOS SDK 独立编译/链接通过。
 HAR 0.1.2 已以 next 提交审核，registry 正式 latest 仍为 0.1.0。历史 Maven/Swift 0.1.1 和 HAR 0.1.0 保留。
 
-## HAR 0.1.3 发布候选
+## HAR 0.1.3 prerelease
 
 拍照/保存临时路径改用实例 UUID 加请求序号，防止同毫秒跨页面覆盖或清理另一请求文件。目录、finally 释放和桥接契约保持。
 
 | 渠道 | 本轮消费版本 | 状态 |
 | --- | --- | --- |
-| HarmonyOS HAR | 0.1.3 | 待发布和真实 Release/Registry 消费 |
+| HarmonyOS HAR | 0.1.3 | 已发布且下载 SHA/API22 独立编译通过；Registry 审核中 |
 | Maven core/Kuikly | 0.1.2 | 生产 Kotlin 未变，沿用已验精确远程版本 |
 | Swift Package GycMedia | 0.1.2 | 原生 Swift 未变，沿用已验精确消费版本 |
 

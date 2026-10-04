@@ -11,7 +11,7 @@ import { MediaModule } from '@gycrosskit/media';
 modules.set(MediaModule.MODULE_NAME, () => new MediaModule());
 ```
 
-当前为 HAR 0.1.3 候选，尚未发布；历史版本保持。模块名称 GycMedia；Kotlin 侧使用已验 media-kuikly:0.1.2，桥接契约兼容。
+HAR 0.1.3 已提供不可变 Release 并通过 API22 独立消费，OHPM next 仍在审核，精确 Registry 安装尚不可用；历史版本保持。模块名称 GycMedia；Kotlin 侧使用已验 media-kuikly:0.1.2，桥接契约兼容。
 临时文件使用实例 UUID 加请求序号，避免跨页面同毫秒碰撞；目录与本次请求清理归属保持。
 宿主提供相机权限声明，页面销毁调用 Kotlin MediaModule.dispose()。pick/save 附加 requestId，cancel 只结束
 匹配请求等待，阻止后续读写并在收尾时释放原生资源；系统 Picker 返回前仍保持 busy，旧 ID 不影响新请求。
