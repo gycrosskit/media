@@ -104,3 +104,5 @@ iOS/HarmonyOS 按系统图像解码能力识别格式。不提供视频、上传
 - [版本与发行说明](https://github.com/gycrosskit/media/releases)、[问题反馈](https://github.com/gycrosskit/media/issues)。
 
 组件源码使用 Apache-2.0，见 [LICENSE](LICENSE)。Kuikly 和平台 SDK 遵循各自许可。
+
+本轮制品校验与远程状态见 [0.1.3 发布验收](docs/发布验收-0.1.3.md)。
