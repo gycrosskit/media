@@ -2,15 +2,15 @@
 
 系统选图、拍照、可选 JPEG 压缩和保存相册。返回图片编码字节、文件名与 MIME；上传、业务大小限制和页面提示由宿主负责。
 
-Maven 候选版本 `0.1.4` 修复 Android/iOS Picker 的线程、取消与释放交付边界。当前正在完成远程发布门禁，结果见 [0.1.4 远程发布验收](docs/0.1.4远程发布验收.md)。
+Maven 预发行 `0.1.4` 已发布，修复 Android/iOS Picker 的线程、取消与释放交付边界。Android 5 项、iOS Simulator 6 项测试通过，完整 Maven 归档、公开 Release 下载 SHA 和 JitPack 制品审计通过，结果见 [0.1.4 远程发布验收](docs/0.1.4远程发布验收.md)。
 
 | 渠道 | 配套版本 | 状态 |
 | --- | --- | --- |
-| Maven core/Kuikly | 0.1.4 | 本地 Android/iOS 回归通过；远程门禁进行中 |
+| Maven core/Kuikly | 0.1.4 | 预发行已发布；JitPack 制品审计通过 |
 | Swift Package GycMedia | 0.1.2 | Swift 原生源码未变，保留已验证版本 |
 | HarmonyOS HAR | 0.1.3 | 保留已验证 Release HAR；Registry 可安装状态独立核对 |
 
-0.1.3 标签只提供 HAR；Maven 历史版本为 0.1.2，新候选为 0.1.4。
+0.1.3 标签只提供 HAR；Maven 历史版本为 0.1.2，当前预发行为 0.1.4。
 
 ## 平台与要求
 
@@ -102,6 +102,12 @@ classDiagram
 // settings.gradle.kts
 dependencyResolutionManagement {
     repositories {
+        exclusiveContent {
+            forRepository {
+                maven("https://mirrors.tencent.com/nexus/repository/maven-tencent/")
+            }
+            filter { includeGroup("com.tencent.kuikly-open") }
+        }
         maven("https://jitpack.io")
         maven("https://maven.eazytec-cloud.com/nexus/repository/maven-public/")
         google()
@@ -109,6 +115,8 @@ dependencyResolutionManagement {
     }
 }
 ```
+
+Kuikly group 固定从腾讯 Maven 读取 metadata 和实际产物，避免其他镜像先返回 metadata、随后产物缺失时 Gradle 无法切源。此规则只匹配 `com.tencent.kuikly-open`，其他 SDK 的仓库选择保持；本轮检查见 [0.1.4 远程发布验收](docs/0.1.4远程发布验收.md)。
 
 ```kotlin
 commonMain.dependencies {
@@ -121,7 +129,7 @@ ohosArm64Main.dependencies {
 
 iOS 在 Xcode 的 Package Dependencies 添加 `https://github.com/gycrosskit/media.git`，选择精确版本 `0.1.2`，产品 `GycMedia`。KMP 不自动导入该 Swift Package，桥接步骤见接入指南。
 
-HarmonyOS 原生包独立安装；本轮候选 Maven 0.1.4 配合已验 HAR 0.1.3，桥接契约兼容。以下 registry 命令需等待审核可见；
+HarmonyOS 原生包独立安装；本轮 Maven 0.1.4 配合已验 HAR 0.1.3，桥接契约兼容。以下 registry 命令需等待审核可见；
 审核期间可使用既有 Maven/HAR 0.1.2 配对，或从对应 Release 下载并校验 HAR 后本地安装：
 
 ```sh
@@ -173,4 +181,4 @@ iOS/HarmonyOS 按系统图像解码能力识别格式。不提供视频、上传
 
 组件源码使用 Apache-2.0，见 [LICENSE](LICENSE)。Kuikly 和平台 SDK 遵循各自许可。
 
-本轮制品校验与远程状态见 [0.1.3 发布验收](docs/发布验收-0.1.3.md)。
+本轮制品校验与远程状态见 [0.1.4 发布验收](docs/0.1.4远程发布验收.md)，历史 HAR 发布记录见 [0.1.3 发布验收](docs/发布验收-0.1.3.md)。
