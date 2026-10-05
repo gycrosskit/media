@@ -1,3 +1,18 @@
+// 依赖缓存可能让首次 DNS 推迟到测试阶段；只在下载前有限重试域名解析，不重跑测试。
+def ciDnsHost = 'maven.eazytec-cloud.com'
+println "CI DNS cache: positive=${java.security.Security.getProperty('networkaddress.cache.ttl')}, negative=${java.security.Security.getProperty('networkaddress.cache.negative.ttl')}"
+for (int attempt = 1; attempt <= 3; attempt++) {
+    try {
+        def addresses = java.net.InetAddress.getAllByName(ciDnsHost)
+        println "CI DNS resolved ${ciDnsHost}: ${addresses.length} addresses (attempt ${attempt})"
+        break
+    } catch (java.net.UnknownHostException failure) {
+        println "CI DNS lookup failed for ${ciDnsHost} (attempt ${attempt}/3): ${failure.message}"
+        if (attempt == 3) throw failure
+        Thread.sleep(1000)
+    }
+}
+
 // 定制 Kotlin 保留 Eazytec；标准 AGP/AAPT 从官方解析，避免镜像 POM 存在但 classifier 缺失。
 // 国内 Aliyun 镜像 502 会使 Gradle 禁用仓库，因此仅在 CI 中移除。
 gradle.settingsEvaluated { settings ->
