@@ -50,7 +50,6 @@ jobs:
       - run: test -f "$ANDROID_HOME/platforms/android-36/android.jar"
       - run: bash gradlew --init-script "$PWD/scripts/ci-repositories.gradle" --info :media-core:testDebugUnitTest :media-core:compileDebugKotlinAndroid --no-daemon --max-workers=1
       - run: |
-          curl --fail --silent --show-error --max-time 60 -o "$RUNNER_TEMP/kotlin-jvm-plugin.pom" -w "Kotlin JVM marker HTTP %{http_code}\n" https://maven.eazytec-cloud.com/nexus/repository/maven-public/org/jetbrains/kotlin/jvm/org.jetbrains.kotlin.jvm.gradle.plugin/2.2.21-1.0.0/org.jetbrains.kotlin.jvm.gradle.plugin-2.2.21-1.0.0.pom
           bash gradlew --init-script "$PWD/scripts/ci-repositories.gradle" -p verification-kuikly test --refresh-dependencies --info --no-daemon --max-workers=1
   native:
     runs-on: macos-15

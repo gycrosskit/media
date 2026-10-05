@@ -1,4 +1,4 @@
-// 依赖缓存可能让首次 DNS 推迟到测试阶段；只在下载前有限重试域名解析，不重跑测试。
+// 尽力预热 DNS；缓存可能已满足构建，是否缺少依赖由实际 Gradle 解析决定。
 def ciDnsHost = 'maven.eazytec-cloud.com'
 println "CI DNS cache: positive=${java.security.Security.getProperty('networkaddress.cache.ttl')}, negative=${java.security.Security.getProperty('networkaddress.cache.negative.ttl')}"
 for (int attempt = 1; attempt <= 3; attempt++) {
@@ -8,7 +8,10 @@ for (int attempt = 1; attempt <= 3; attempt++) {
         break
     } catch (java.net.UnknownHostException failure) {
         println "CI DNS lookup failed for ${ciDnsHost} (attempt ${attempt}/3): ${failure.message}"
-        if (attempt == 3) throw failure
+        if (attempt == 3) {
+            println "CI DNS warmup unavailable; Gradle dependency resolution remains the gate."
+            break
+        }
         Thread.sleep(1000)
     }
 }
