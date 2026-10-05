@@ -82,7 +82,8 @@ export class MediaModule extends KuiklyRenderBaseModule {
     if (this.destroyed || request.cancelled) { return { status: 'cancelled' }; }
     if (method === 'pick') { return this.pick(args, request); }
     if (method !== 'save') { return { status: 'failed' }; }
-    if (typeof args.data !== 'string' || args.data.length > Math.ceil(this.maxBytes / 3) * 4) {
+    if ((args.fileNamePrefix !== undefined && typeof args.fileNamePrefix !== 'string') ||
+      typeof args.data !== 'string' || args.data.length > Math.ceil(this.maxBytes / 3) * 4) {
       return { status: 'invalid_content' };
     }
     const padding = args.data.endsWith('==') ? 2 : args.data.endsWith('=') ? 1 : 0;
@@ -178,13 +179,30 @@ export class MediaModule extends KuiklyRenderBaseModule {
   private async save(bytes: ArrayBuffer, prefix: string, request: PendingMediaRequest): Promise<MediaResult> {
     const context = this.controller?.getUIAbilityContext();
     if (!context) { return { status: 'failed' }; }
-    const source = image.createImageSource(bytes);
-    let extension: string;
-    try { extension = this.extension((await source.getImageInfo()).mimeType); }
+    if (!this.hasCompleteImageContainer(bytes)) { return { status: 'invalid_content' }; }
+    let source: image.ImageSource;
+    try { source = image.createImageSource(bytes); }
     catch (_) { return { status: 'invalid_content' }; }
-    finally { await source.release(); }
+    let extension: string;
+    try {
+      let info: image.ImageInfo;
+      try { info = await source.getImageInfo(); }
+      catch (_) { return { status: 'invalid_content' }; }
+      if (this.destroyed || request.cancelled) { return { status: 'cancelled' }; }
+      extension = this.extension(info.mimeType);
+      if (extension === 'bin') { return { status: 'invalid_content' }; }
+      // 只读取尺寸可能接受无像素的截断图片，实际解码小 PixelMap 后仍保存原始 bytes。
+      const ratio = Math.min(1, 256 / Math.max(info.size.width, info.size.height));
+      let pixels: image.PixelMap;
+      try {
+        pixels = await source.createPixelMap({ desiredSize: {
+          width: Math.max(1, Math.round(info.size.width * ratio)),
+          height: Math.max(1, Math.round(info.size.height * ratio))
+        } });
+      } catch (_) { return { status: 'invalid_content' }; }
+      await pixels.release();
+    } finally { await source.release(); }
     if (this.destroyed || request.cancelled) { return { status: 'cancelled' }; }
-    if (extension === 'bin') { return { status: 'invalid_content' }; }
     const path = this.tempPath(extension);
     const helper = photoAccessHelper.getPhotoAccessHelper(context);
     try {
@@ -204,6 +222,47 @@ export class MediaModule extends KuiklyRenderBaseModule {
     } finally {
       try { await helper.release(); } finally { await this.removeTemp(path); }
     }
+  }
+
+  // 系统解码器可能容忍部分图像；这里只核对常见容器的完整结束边界，允许尾随数据。
+  private hasCompleteImageContainer(data: ArrayBuffer): boolean {
+    const bytes = new Uint8Array(data);
+    const size = bytes.length;
+    if (size >= 8 && bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71) {
+      let offset = 8;
+      while (offset <= size - 12) {
+        const length = bytes[offset] * 16777216 + bytes[offset + 1] * 65536 + bytes[offset + 2] * 256 + bytes[offset + 3];
+        if (length > size - offset - 12) { return false; }
+        if (bytes[offset + 4] === 73 && bytes[offset + 5] === 69 && bytes[offset + 6] === 78 && bytes[offset + 7] === 68) {
+          return length === 0;
+        }
+        offset += length + 12;
+      }
+      return false;
+    }
+    if (size >= 3 && bytes[0] === 255 && bytes[1] === 216) {
+      let offset = 2;
+      while (offset < size - 1) {
+        const value = bytes[offset++];
+        if (value !== 255) { continue; }
+        while (offset < size && bytes[offset] === 255) { offset++; }
+        if (offset >= size) { return false; }
+        const marker = bytes[offset++];
+        if (marker === 217) { return true; }
+        if (marker === 0 || marker === 1 || marker === 216 || (marker >= 208 && marker <= 215)) { continue; }
+        if (offset > size - 2) { return false; }
+        const length = bytes[offset] * 256 + bytes[offset + 1];
+        if (length < 2 || length > size - offset) { return false; }
+        offset += length;
+      }
+      return false;
+    }
+    if (size >= 12 && bytes[0] === 82 && bytes[1] === 73 && bytes[2] === 70 && bytes[3] === 70 &&
+      bytes[8] === 87 && bytes[9] === 69 && bytes[10] === 66 && bytes[11] === 80) {
+      const declared = bytes[4] + bytes[5] * 256 + bytes[6] * 65536 + bytes[7] * 16777216;
+      return declared >= 4 && declared + 8 <= size;
+    }
+    return true;
   }
 
   private async read(uri: string, remainingBytes: number, request: PendingMediaRequest): Promise<ArrayBuffer> {

@@ -1,9 +1,11 @@
 # @gycrosskit/media
 
+本轮 HAR 候选为 `0.1.5`，尚未发布；下面精确安装命令用于发布并确认可见后，历史验收不代表本候选已验收。
+
 系统选图、拍照、可选 JPEG 压缩和相册保存的 Kuikly Module。当前 HAR target/compatible SDK 为 HarmonyOS API 22。
 
 ```sh
-ohpm install @gycrosskit/media@0.1.3
+ohpm install @gycrosskit/media@0.1.5
 ```
 
 ```typescript

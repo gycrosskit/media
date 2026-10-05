@@ -140,7 +140,7 @@ public final class MediaClient: NSObject {
     public func saveImage(data: Data, fileNamePrefix: String, callback: MediaSaveCallback) {
         UIKitExecutionContext.run { [weak self] in
             guard let self else { return }
-            guard UIImage(data: data) != nil else {
+            guard Self.isValidImageForSave(data) else {
                 callback.onInvalidContent()
                 return
             }
@@ -271,6 +271,64 @@ public final class MediaClient: NSObject {
         picker.mediaTypes = [UTType.image.identifier]
         picker.delegate = self
         presentPicker(picker, requestId: requestId)
+    }
+
+    // ImageIO 也可返回部分 PNG；先校验常见格式的结束边界，再小尺寸实际解码。
+    // 这是保存入口的内容验证，不重新编码原图，也不声称验证所有编码细节。
+    static func isValidImageForSave(_ data: Data) -> Bool {
+        guard hasCompleteImageContainer(data),
+              let source = CGImageSourceCreateWithData(data as CFData, nil) else { return false }
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: 256,
+            kCGImageSourceShouldCacheImmediately: true
+        ] as CFDictionary) != nil
+    }
+
+    private static func hasCompleteImageContainer(_ data: Data) -> Bool {
+        data.withUnsafeBytes { raw in
+            let bytes = raw.bindMemory(to: UInt8.self)
+            let size = bytes.count
+            if size >= 8 && bytes[0] == 137 && bytes[1] == 80 && bytes[2] == 78 && bytes[3] == 71 {
+                var offset = 8
+                while offset <= size - 12 {
+                    let length = (0..<4).reduce(UInt64(0)) { ($0 << 8) | UInt64(bytes[offset + $1]) }
+                    if length > UInt64(size - offset - 12) { return false }
+                    if bytes[offset + 4] == 73 && bytes[offset + 5] == 69 && bytes[offset + 6] == 78 && bytes[offset + 7] == 68 {
+                        return length == 0
+                    }
+                    offset += Int(length) + 12
+                }
+                return false
+            }
+            if size >= 3 && bytes[0] == 255 && bytes[1] == 216 {
+                // Motion Photo 等合法 JPEG 可在 EOI 后附加数据，不能要求文件恰好结束。
+                var offset = 2
+                while offset < size - 1 {
+                    let value = bytes[offset]
+                    offset += 1
+                    if value != 255 { continue }
+                    while offset < size && bytes[offset] == 255 { offset += 1 }
+                    if offset >= size { return false }
+                    let marker = bytes[offset]
+                    offset += 1
+                    if marker == 217 { return true }
+                    if marker == 0 || marker == 1 || marker == 216 || (208...215).contains(marker) { continue }
+                    if offset > size - 2 { return false }
+                    let length = Int(bytes[offset]) * 256 + Int(bytes[offset + 1])
+                    if length < 2 || length > size - offset { return false }
+                    offset += length
+                }
+                return false
+            }
+            if size >= 12 && bytes[0] == 82 && bytes[1] == 73 && bytes[2] == 70 && bytes[3] == 70 &&
+                bytes[8] == 87 && bytes[9] == 69 && bytes[10] == 66 && bytes[11] == 80 {
+                let declared = (0..<4).reduce(UInt64(0)) { $0 | (UInt64(bytes[4 + $1]) << (8 * $1)) }
+                return declared >= 4 && declared + 8 <= UInt64(size)
+            }
+            // 其他原来受 ImageIO 支持的格式仍交给系统实际解码。
+            return true
+        }
     }
 
     /// 使用原始编码写入照片库，避免把二维码重新压缩后降低识别清晰度。
