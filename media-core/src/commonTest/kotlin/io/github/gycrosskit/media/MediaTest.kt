@@ -5,6 +5,8 @@ class MediaTest {
         assertFailsWith<IllegalArgumentException> { ImageCompression(0, 80) }
         assertFailsWith<IllegalArgumentException> { ImageCompression(1024, 101) }
         assertFailsWith<IllegalArgumentException> { ImagePickerRequest(ImagePickerSource.GALLERY, 0) }
+        assertFailsWith<IllegalArgumentException> { ImagePickerRequest(ImagePickerSource.GALLERY, 501) }
+        assertEquals(500, ImagePickerRequest(ImagePickerSource.GALLERY, 500).maxCount)
         assertFailsWith<IllegalArgumentException> { ImagePickerResult.Selected(emptyList()) }
     }
     @Test fun imageSnapshotUsesByteContentEquality() {

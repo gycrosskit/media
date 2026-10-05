@@ -24,7 +24,7 @@ data class ImageCompression(
 /**
  * 与 Uri、UIImage 等平台类型无关的系统选图请求。
  * @property source 相机或相册；相机权限由宿主提供。
- * @property maxCount 相册选择数量上限，默认 1，必须为正；相机只产生一张。
+ * @property maxCount 相册选择数量上限，默认 1，范围 1..500；系统可限制更低数量，相机只产生一张。
  * @property compression 默认 null 保留原始编码；指定后输出 JPEG 并同步 MIME/扩展名。
  */
 data class ImagePickerRequest(
@@ -33,7 +33,7 @@ data class ImagePickerRequest(
     val compression: ImageCompression? = null,
 ) {
     init {
-        require(maxCount > 0) { "图片选择数量必须大于 0" }
+        require(maxCount in 1..500) { "图片选择数量必须在 1..500 之间" }
     }
 }
 

@@ -125,46 +125,51 @@ class AndroidImagePickerPlatform(
             continuation.invokeOnCancellation { activity.runOnUiThread { cleanup() } }
             if (!continuation.isActive) return@suspendCancellableCoroutine
 
-            when (request.source) {
-                ImagePickerSource.CAMERA -> {
-                    val cameraLauncher = registry.register(
-                        "image_picker_camera_$suffix",
-                        ActivityResultContracts.TakePicture(),
-                    ) { success ->
-                        if (success) finishSelection(listOfNotNull(cameraOutputUri))
-                        else finish(ImagePickerResult.Cancelled)
-                    }
-                    launchers += cameraLauncher
-
-                    fun launchCamera() {
-                        runCatching {
-                            val imageFile = File(
-                                activity.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
-                                "picked_${System.currentTimeMillis()}.jpg",
-                            ).apply { parentFile?.mkdirs() }
-                            cameraOutputFile = imageFile
-                            val uri = FileProvider.getUriForFile(
-                                activity,
-                                fileProviderAuthority,
-                                imageFile,
-                            )
-                            cameraOutputUri = uri
-                            cameraLauncher.launch(uri)
-                        }.onFailure {
-                            android.util.Log.e("GycMedia", "打开系统相机失败", it)
-                            finish(ImagePickerResult.Failed("无法打开系统相机"))
+            try {
+                when (request.source) {
+                    ImagePickerSource.CAMERA -> {
+                        val cameraLauncher = registry.register(
+                            "image_picker_camera_$suffix",
+                            ActivityResultContracts.TakePicture(),
+                        ) { success ->
+                            if (success) finishSelection(listOfNotNull(cameraOutputUri))
+                            else finish(ImagePickerResult.Cancelled)
                         }
-                    }
+                        launchers += cameraLauncher
 
-                    launchCamera()
+                        fun launchCamera() {
+                            runCatching {
+                                val imageFile = File(
+                                    activity.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
+                                    "picked_$suffix.jpg",
+                                ).apply { parentFile?.mkdirs() }
+                                cameraOutputFile = imageFile
+                                val uri = FileProvider.getUriForFile(
+                                    activity,
+                                    fileProviderAuthority,
+                                    imageFile,
+                                )
+                                cameraOutputUri = uri
+                                cameraLauncher.launch(uri)
+                            }.onFailure {
+                                android.util.Log.e("GycMedia", "打开系统相机失败", it)
+                                finish(ImagePickerResult.Failed("无法打开系统相机"))
+                            }
+                        }
+
+                        launchCamera()
+                    }
+                    ImagePickerSource.GALLERY -> launchGallery(
+                        suffix = suffix,
+                        maxCount = request.maxCount,
+                        launchers = launchers,
+                        finishSelection = ::finishSelection,
+                        finish = ::finish,
+                    )
                 }
-                ImagePickerSource.GALLERY -> launchGallery(
-                    suffix = suffix,
-                    maxCount = request.maxCount,
-                    launchers = launchers,
-                    finishSelection = ::finishSelection,
-                    finish = ::finish,
-                )
+            } catch (error: Exception) {
+                android.util.Log.e("GycMedia", "打开系统图片选择器失败", error)
+                finish(ImagePickerResult.Failed("无法打开系统图片选择器"))
             }
         }
 

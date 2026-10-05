@@ -1,5 +1,9 @@
 # 更新日志
 
+## 未发布：Maven/HAR 0.1.5，Swift native-0.1.3
+
+修复现代 Android Picker 启动清理、相机跨实例文件隔离和 maxCount 1..500 合同。保存继续写原字节：Android API28+ 严格拒绝 ImageDecoder partial，API24–27 与 Swift 对 PNG/JPEG/WebP 检查标准结束边界后小尺寸实际解码；HAR 实际解码并释放小 PixelMap。修复可读尺寸但缺少像素的截断输入误入授权/保存。Swift 采用独立不可变 tag/revision `native-0.1.3`，不重用仅提供 HAR 的历史 `0.1.3` tag；此仓库不提供 CocoaPods podspec。候选均未发布，远程消费及设备验收另行记录。
+
 ## HAR 0.1.3
 
 拍照/保存临时路径改用实例 UUID 加请求序号，防止同毫秒跨页面覆盖或清理另一请求文件。目录、finally 释放和桥接契约保持。

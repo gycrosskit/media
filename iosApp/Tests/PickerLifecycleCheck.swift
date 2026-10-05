@@ -15,6 +15,16 @@ private final class Callback: MediaPickerCallback {
     func onFailed(message: String) { failed += 1 }
 }
 
+private final class SaveCallback: MediaSaveCallback {
+    var invalid = 0
+    func onSaved() { fatalError("Unexpected save") }
+    func onPermissionDenied() { fatalError("Invalid data must not request permission") }
+    func onPermissionBlocked() { fatalError("Invalid data must not inspect permission") }
+    func onPermissionRestricted() { fatalError("Invalid data must not inspect permission") }
+    func onInvalidContent() { invalid += 1 }
+    func onFailed(message: String) { fatalError(message) }
+}
+
 private final class Presenter: UIViewController {
     var controllers: [UIViewController] = []
     var actuallyPresent = true
@@ -63,6 +73,30 @@ private func pick(_ callback: Callback) {
 
 @MainActor
 private func runChecks(window: UIWindow) async {
+    let renderer = UIGraphicsImageRenderer(size: CGSize(width: 2, height: 2))
+    let encoded = renderer.pngData { context in
+        UIColor.red.setFill()
+        context.fill(CGRect(x: 0, y: 0, width: 2, height: 2))
+    }
+    let idat = encoded.range(of: Data("IDAT".utf8))!
+    let truncated = Data(encoded.prefix(idat.upperBound))
+    precondition(UIImage(data: truncated) != nil, "Fixture must expose UIKit's partial decode")
+    precondition(!MediaClient.isValidImageForSave(truncated), "Missing pixels/end must be invalid")
+    precondition(MediaClient.isValidImageForSave(encoded), "Complete PNG must remain valid")
+    precondition(MediaClient.isValidImageForSave(encoded + Data([0, 32])), "Trailing data must remain supported")
+    let jpeg = renderer.jpegData(withCompressionQuality: 0.9) { context in
+        UIColor.red.setFill()
+        context.fill(CGRect(x: 0, y: 0, width: 2, height: 2))
+    }
+    precondition(MediaClient.isValidImageForSave(jpeg + Data([0, 32])), "JPEG with appended data must remain valid")
+    precondition(!MediaClient.isValidImageForSave(Data(jpeg.dropLast(2))), "Missing JPEG EOI must be invalid")
+    let metadataEOI = Data(jpeg.prefix(2)) + Data([255, 225, 0, 4, 255, 217]) + Data(jpeg.dropFirst(2).dropLast(2))
+    print("FIXTURE JPEG metadata EOI UIImage=\(UIImage(data: metadataEOI) != nil)")
+    precondition(!MediaClient.isValidImageForSave(metadataEOI), "Embedded EOI cannot terminate primary JPEG")
+    let saveCallback = SaveCallback()
+    MediaClient.shared.saveImage(data: truncated, fileNamePrefix: "partial", callback: saveCallback)
+    precondition(saveCallback.invalid == 1, "Production save must reject before Photos authorization")
+    print("PASS: Save content boundary PNG/JPEG, preserved trailing bytes and production invalid callback")
     let unused = Controller()
     var completed = 0
     UIKitPresentationContext.dismiss(unused, animated: true) { completed += 1 }

@@ -1,5 +1,7 @@
 # GY CrossKit Media
 
+[本轮完整源码审查](docs/完整源码审查.md) 列出全部生产文件、公开调用链、实际验证与未测项。
+
 系统选图、拍照、可选 JPEG 压缩和保存相册。返回图片编码字节、文件名与 MIME；上传、业务大小限制和页面提示由宿主负责。
 
 Maven 预发行 `0.1.4` 已发布，修复 Android/iOS Picker 的线程、取消与释放交付边界。Android 5 项、iOS Simulator 6 项测试通过，完整 Maven 归档、公开 Release 下载 SHA 和 JitPack 制品审计通过，结果见 [0.1.4 远程发布验收](docs/0.1.4远程发布验收.md)。
@@ -7,10 +9,16 @@ Maven 预发行 `0.1.4` 已发布，修复 Android/iOS Picker 的线程、取消
 | 渠道 | 配套版本 | 状态 |
 | --- | --- | --- |
 | Maven core/Kuikly | 0.1.4 | 预发行已发布；JitPack 制品审计通过 |
-| Swift Package GycMedia | 0.1.2 | Swift 原生源码未变，保留已验证版本 |
+| Swift Package GycMedia | 0.1.2 | 已验证历史版本；新 Swift 候选见下节 |
 | HarmonyOS HAR | 0.1.3 | 保留已验证 Release HAR；Registry 可安装状态独立核对 |
 
 0.1.3 标签只提供 HAR；Maven 历史版本为 0.1.2，当前预发行为 0.1.4。
+
+## 0.1.5 候选（未发布）
+
+本轮 Maven core/Kuikly 与 HAR 同为 `0.1.5`，尚未发布；下文安装坐标用于发布后的精确消费。 Swift Package 新候选 revision 为 `native-0.1.3`，尚未发布。
+
+选图数量合同统一为 `1..500`，系统 Picker 可采用更低上限。Android Launcher 注册/启动异常都会清理 owner；相机临时文件按请求 suffix 隔离。保存保留原始字节：Android API28+ 严格拒绝 partial；API24–27、Swift 和 HAR 先核对 PNG/JPEG/WebP 结束边界再做小尺寸实际解码。兼容解码器对其他编码错误的限制见完整源码审查。HAR 保存的非字符串文件名前缀在任何原生读写前返回 `invalid_content`。
 
 ## 平台与要求
 
@@ -120,20 +128,20 @@ Kuikly group 固定从腾讯 Maven 读取 metadata 和实际产物，避免其�
 
 ```kotlin
 commonMain.dependencies {
-    implementation("com.github.gycrosskit.media:media-core:0.1.4")
+    implementation("com.github.gycrosskit.media:media-core:0.1.5")
 }
 ohosArm64Main.dependencies {
-    implementation("com.github.gycrosskit.media:media-kuikly:0.1.4")
+    implementation("com.github.gycrosskit.media:media-kuikly:0.1.5")
 }
 ```
 
-iOS 在 Xcode 的 Package Dependencies 添加 `https://github.com/gycrosskit/media.git`，选择精确版本 `0.1.2`，产品 `GycMedia`。KMP 不自动导入该 Swift Package，桥接步骤见接入指南。
+iOS 在 Xcode 的 Package Dependencies 添加 `https://github.com/gycrosskit/media.git`，选择精确 revision/tag `native-0.1.3`，产品 `GycMedia`（候选尚未发布；历史版本仍为 `0.1.2`）。KMP 不自动导入该 Swift Package，桥接步骤见接入指南。
 
-HarmonyOS 原生包独立安装；本轮 Maven 0.1.4 配合已验 HAR 0.1.3，桥接契约兼容。以下 registry 命令需等待审核可见；
+HarmonyOS 原生包独立安装；本轮 Maven/HAR 0.1.5 候选需待发布后独立验证。以下 registry 命令需等待审核可见；
 审核期间可使用既有 Maven/HAR 0.1.2 配对，或从对应 Release 下载并校验 HAR 后本地安装：
 
 ```sh
-ohpm install @gycrosskit/media@0.1.3
+ohpm install @gycrosskit/media@0.1.5
 ```
 
 ## 最小使用

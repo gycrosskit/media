@@ -21,7 +21,7 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 
 function fixture(options = {}) {
   const events = { selected: 0, opened: [], closed: [], written: [], removed: [], decoded: 0,
-    encoded: [], writes: [], sources: 0, sourceReleased: 0, pixelsReleased: 0, packerReleased: 0, helperReleased: 0 };
+    encoded: [], writes: [], sources: 0, pixelDecodes: 0, sourceReleased: 0, pixelsReleased: 0, packerReleased: 0, helperReleased: 0 };
   const exports = {};
   let nextFd = 1;
   const files = new Map();
@@ -30,7 +30,11 @@ function fixture(options = {}) {
     events.sources++;
     return {
       getImageInfo: async () => ({ mimeType: 'image/png', size: { width: 100, height: 100 } }),
-      createPixelMap: async () => ({ release: async () => { events.pixelsReleased++; } }),
+      createPixelMap: async settings => {
+        events.pixelDecodes++;
+        if (options.decodePixels) await options.decodePixels(settings);
+        return { release: async () => { events.pixelsReleased++; } };
+      },
       release: async () => { events.sourceReleased++; }
     };
   };
@@ -298,4 +302,73 @@ test('camera failure does not masquerade as cancellation and removes its owned t
   assert.equal(events.opened.length, 1);
   assert.equal(events.closed.length, 1);
   assert.equal(events.removed.length, 1);
+});
+
+test('malformed save prefix is rejected before decoding or native writes', async () => {
+  const { module, events } = fixture();
+  let result;
+  module.call('save', JSON.stringify({ requestId: 'bad-prefix', data: 'AQ==', fileNamePrefix: 3 }), value => { result = value; });
+  await flush();
+  assert.equal(result.status, 'invalid_content');
+  assert.equal(events.decoded, 0);
+  assert.equal(events.sources, 0);
+  assert.deepEqual(events.opened, []);
+});
+
+test('save rejects metadata-only image when pixel decoding fails before any file or authorization', async () => {
+  const { module, events } = fixture({ decodePixels: async () => { throw new Error('Incomplete pixels'); } });
+  const responses = invoke(module, 'save', { requestId: 'bad-pixels', data: 'AQID' });
+  await flush();
+  assert.equal(responses[0].status, 'invalid_content');
+  assert.equal(events.pixelDecodes, 1);
+  assert.equal(events.sourceReleased, 1);
+  assert.equal(events.helperReleased, 0);
+  assert.deepEqual(events.opened, []);
+});
+
+test('cancellation during save pixel decoding releases decoded resources without opening a file', async () => {
+  const pixels = deferred();
+  const { module, events } = fixture({ decodePixels: () => pixels.promise });
+  const responses = invoke(module, 'save', { requestId: 'pixel-cancel', data: 'AQID' });
+  await flush();
+  cancel(module, 'pixel-cancel');
+  pixels.resolve();
+  await flush();
+  assert.equal(responses[0].status, 'cancelled');
+  assert.equal(responses.length, 1);
+  assert.equal(events.sourceReleased, 1);
+  assert.equal(events.pixelsReleased, 1);
+  assert.deepEqual(events.opened, []);
+});
+
+test('save rejects PNG with dimensions but missing pixel payload/end even if native decoder tolerates it', async () => {
+  // 真实 2x2 PNG，截到 IDAT type。元数据/像素 mock 都可成功，边界仍必须在系统授权前拒绝。
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVQImWP8z8Dwn4GBgYGJAQoAHgQCAfQ/XjoAAAAASUVORK5CYII=', 'base64');
+  const truncated = png.subarray(0, png.indexOf('IDAT') + 4);
+  const rejected = fixture();
+  const responses = invoke(rejected.module, 'save', { requestId: 'partial-png', data: truncated.toString('base64') });
+  await flush();
+  assert.equal(responses[0].status, 'invalid_content');
+  assert.equal(rejected.events.sources, 0);
+  assert.deepEqual(rejected.events.opened, []);
+  const valid = fixture();
+  const original = Buffer.concat([png, Buffer.from([0, 32])]);
+  const saved = invoke(valid.module, 'save', { requestId: 'complete-png', data: original.toString('base64') });
+  await flush();
+  assert.equal(saved[0].status, 'saved');
+  assert.equal(valid.events.pixelsReleased, 1);
+  assert.deepEqual(valid.events.writes[1], [...original]);
+});
+
+test('JPEG metadata embedded EOI cannot replace primary end marker', async () => {
+  const truncated = fixture();
+  const bytes = Buffer.from([255, 216, 255, 225, 0, 4, 255, 217, 255, 218, 0, 2, 1, 2]);
+  const responses = invoke(truncated.module, 'save', { requestId: 'embedded-end', data: bytes.toString('base64') });
+  await flush();
+  assert.equal(responses[0].status, 'invalid_content');
+  assert.equal(truncated.events.sources, 0);
+  const complete = fixture();
+  const saved = invoke(complete.module, 'save', { requestId: 'primary-end', data: Buffer.concat([bytes, Buffer.from([255, 217, 0, 32])]).toString('base64') });
+  await flush();
+  assert.equal(saved[0].status, 'saved');
 });
