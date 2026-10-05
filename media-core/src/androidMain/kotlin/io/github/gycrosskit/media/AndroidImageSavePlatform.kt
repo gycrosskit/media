@@ -30,7 +30,9 @@ class AndroidImageSavePlatform(
 
     private suspend fun ensureLegacyWritePermission(): ImageSaveResult? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) return null
-        return when (permission(Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+        return when (withContext(Dispatchers.Main.immediate) {
+            permission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }) {
             MediaPermissionState.GRANTED -> null
             MediaPermissionState.DENIED -> ImageSaveResult.PERMISSION_DENIED
             MediaPermissionState.BLOCKED -> ImageSaveResult.PERMISSION_BLOCKED
