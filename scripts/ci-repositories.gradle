@@ -1,0 +1,9 @@
+// 同一 runner 后续解析 Eazytec 出现 DNS 失败；延长成功解析缓存，不缓存失败。
+java.security.Security.setProperty('networkaddress.cache.ttl', '600')
+java.security.Security.setProperty('networkaddress.cache.negative.ttl', '0')
+// GitHub-hosted runner 访问公开仓库；避免国内镜像 502 阻断 Gradle 的官方仓库解析。
+gradle.settingsEvaluated { settings ->
+    [settings.pluginManagement.repositories, settings.dependencyResolutionManagement.repositories].each { repositories ->
+        repositories.removeAll { it instanceof org.gradle.api.artifacts.repositories.MavenArtifactRepository && it.url.host == 'maven.aliyun.com' }
+    }
+}
