@@ -6,15 +6,11 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.activity.ComponentActivity
-import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.contract.ActivityResultContracts
 import java.io.File
-import kotlin.coroutines.resume
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
-/** Android 使用 MediaStore 写入公共图片目录；旧系统仅在用户主动保存时申请写入权限。 */
+/** Android 使用 MediaStore 写入公共图片目录；旧系统主动保存时在 Main 调用宿主 permission，数据在 IO 写入。 */
 class AndroidImageSavePlatform(
     private val activity: ComponentActivity,
     private val permission: suspend (String) -> MediaPermissionState,
@@ -91,9 +87,6 @@ class AndroidImageSavePlatform(
         }
     }
 }
-
-
-
 
 private data class AndroidImageFormat(val extension: String, val mimeType: String)
 

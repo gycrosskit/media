@@ -25,5 +25,6 @@ enum class ImageSaveResult {
 
 /** Android/iOS 写入系统相册的最小平台能力。 */
 fun interface ImageSavePlatform {
+    /** 等待系统保存结果；取消只结束本地等待，已开始的原生写入不保证可撤销。 */
     suspend fun save(request: ImageSaveRequest): ImageSaveResult
 }

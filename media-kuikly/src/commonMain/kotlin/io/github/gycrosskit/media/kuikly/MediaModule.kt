@@ -62,8 +62,7 @@ class MediaModule : Module(), ImagePickerPlatform, ImageSavePlatform {
                         require(bytes.isNotEmpty() && decodedBytes <= MAX_BYTES)
                         PickedImage(bytes, item.optString("fileName"), item.optString("contentType"))
                     }
-                    if (decoded.isEmpty()) ImagePickerResult.Failed("系统未返回图片")
-                    else ImagePickerResult.Selected(decoded)
+                    ImagePickerResult.Selected(decoded)
                 } catch (_: IllegalArgumentException) {
                     ImagePickerResult.Failed("图片数据无效")
                 }
@@ -133,6 +132,7 @@ class MediaModule : Module(), ImagePickerPlatform, ImageSavePlatform {
     }
 
     companion object {
+        /** 原生模块注册名；入口和协程恢复由宿主保持在 Kuikly 页面线程。 */
         const val NAME = "GycMedia"
         // ponytail: JSON Base64 增加临时内存；单次媒体限 32 MiB，大文件需求改用分块二进制桥。
         private const val MAX_BYTES = 32 * 1024 * 1024

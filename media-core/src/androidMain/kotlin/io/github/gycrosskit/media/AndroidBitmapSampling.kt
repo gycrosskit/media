@@ -10,6 +10,8 @@ import android.net.Uri
  *
  * [sampleAtMostTarget] 适用于二维码等分析场景，允许结果略低于目标值以换取确定的内存上限；上传压缩保持
  * `false`，先解码到不小于目标的最近采样级别，再做一次精确缩放以维持图片质量。
+ * @param maxDimension 目标最长边像素；非正数不降采样。
+ * @param preferredConfig 默认 null，沿用系统解码配置；无效图片返回 null。
  */
 fun ContentResolver.decodeSampledBitmap(
     uri: Uri,
