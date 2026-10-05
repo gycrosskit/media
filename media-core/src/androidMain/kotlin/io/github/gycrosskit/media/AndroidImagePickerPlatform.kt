@@ -17,7 +17,9 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.resume
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -36,19 +38,29 @@ class AndroidImagePickerPlatform(
 ) : ImagePickerPlatform {
     private var activeRequest: ActiveImagePickerRequest? = null
     private var sequence = 0L
+    private var activeGeneration = 0L
+    private val generation = AtomicLong()
 
-    override suspend fun pick(request: ImagePickerRequest): ImagePickerResult = withContext(Dispatchers.Main.immediate) {
-        val ticket = ++sequence
-        activeRequest?.cancel()
-        if (request.source == ImagePickerSource.CAMERA) {
-            when (permission(Manifest.permission.CAMERA)) {
-                MediaPermissionState.GRANTED -> Unit
-                MediaPermissionState.DENIED -> return@withContext ImagePickerResult.PermissionDenied
-                MediaPermissionState.BLOCKED -> return@withContext ImagePickerResult.PermissionBlocked
-                MediaPermissionState.RESTRICTED -> return@withContext ImagePickerResult.PermissionRestricted
+    override suspend fun pick(request: ImagePickerRequest): ImagePickerResult {
+        val epoch = generation.get()
+        val result = withContext(Dispatchers.Main.immediate) {
+            if (epoch != generation.get()) throw CancellationException("图片选择宿主已释放")
+            activeGeneration = epoch
+            val ticket = ++sequence
+            activeRequest?.cancel()
+            if (request.source == ImagePickerSource.CAMERA) {
+                when (permission(Manifest.permission.CAMERA)) {
+                    MediaPermissionState.GRANTED -> Unit
+                    MediaPermissionState.DENIED -> return@withContext ImagePickerResult.PermissionDenied
+                    MediaPermissionState.BLOCKED -> return@withContext ImagePickerResult.PermissionBlocked
+                    MediaPermissionState.RESTRICTED -> return@withContext ImagePickerResult.PermissionRestricted
+                }
             }
+            if (ticket != sequence || epoch != generation.get()) ImagePickerResult.Cancelled else pickAuthorized(request)
         }
-        if (ticket != sequence) ImagePickerResult.Cancelled else pickAuthorized(request)
+        // 原生回调完成后仍可能排队恢复到 Renderer；释放必须同时撤销这段交付窗口。
+        if (epoch != generation.get()) throw CancellationException("图片选择宿主已释放")
+        return result
     }
 
     private suspend fun pickAuthorized(request: ImagePickerRequest): ImagePickerResult =
@@ -109,6 +121,7 @@ class AndroidImagePickerPlatform(
             activeRequest = requestOwner
 
             continuation.invokeOnCancellation { activity.runOnUiThread { cleanup() } }
+            if (!continuation.isActive) return@suspendCancellableCoroutine
 
             when (request.source) {
                 ImagePickerSource.CAMERA -> {
@@ -154,9 +167,15 @@ class AndroidImagePickerPlatform(
         }
 
     override fun dispose() {
-        sequence++
-        activeRequest?.cancel()
-        activeRequest = null
+        val releasedGeneration = generation.incrementAndGet()
+        activity.runOnUiThread {
+            // 延迟释放只取消旧代次；dispose 后合法发起的新请求拥有自己的生命周期。
+            if (activeGeneration < releasedGeneration) {
+                sequence++
+                activeRequest?.cancel()
+                activeRequest = null
+            }
+        }
     }
 
     private fun launchGallery(

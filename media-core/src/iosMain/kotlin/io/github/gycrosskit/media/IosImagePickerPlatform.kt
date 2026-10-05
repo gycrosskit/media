@@ -2,17 +2,37 @@ package io.github.gycrosskit.media
 
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import platform.Foundation.NSData
+import kotlin.concurrent.atomics.AtomicLong
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.resume
 
 /** iOS 系统相机与相册适配；同一宿主只允许存在一个待完成的原生选择请求。 */
+@OptIn(ExperimentalAtomicApi::class)
 class IosImagePickerPlatform(
     private val bridge: IosMediaSdkBridge,
 ) : ImagePickerPlatform {
     private var activeRequest: CancellableContinuation<ImagePickerResult>? = null
+    private var activeGeneration = 0L
+    private val generation = AtomicLong(0L)
 
-    override suspend fun pick(request: ImagePickerRequest): ImagePickerResult =
+    override suspend fun pick(request: ImagePickerRequest): ImagePickerResult {
+        val epoch = generation.load()
+        val result = withContext(Dispatchers.Main.immediate) {
+            if (epoch != generation.load()) throw CancellationException("图片选择宿主已释放")
+            activeGeneration = epoch
+            pickOnMain(request)
+        }
+        // 回调已经完成也不能越过宿主释放，交付前在消费线程核对释放代次。
+        if (epoch != generation.load()) throw CancellationException("图片选择宿主已释放")
+        return result
+    }
+
+    private suspend fun pickOnMain(request: ImagePickerRequest): ImagePickerResult =
         suspendCancellableCoroutine { continuation ->
             val previous = activeRequest
             activeRequest = continuation
@@ -21,12 +41,11 @@ class IosImagePickerPlatform(
             val images = mutableListOf<PickedImage>()
             val callback = object : IosImagePickerSdkCallback {
                 override fun onImage(data: NSData, fileName: String, contentType: String) {
-                    if (activeRequest !== continuation || !continuation.isActive) return
-                    images += PickedImage(
-                        bytes = data.toByteArray(),
-                        fileName = fileName,
-                        contentType = contentType,
-                    )
+                    onMain {
+                        if (activeRequest === continuation && continuation.isActive) {
+                            images += PickedImage(data.toByteArray(), fileName, contentType)
+                        }
+                    }
                 }
 
                 override fun onCompleted() {
@@ -60,9 +79,11 @@ class IosImagePickerPlatform(
                 }
             }
             continuation.invokeOnCancellation {
-                if (activeRequest === continuation) {
-                    activeRequest = null
-                    bridge.cancelImagePicker()
+                onMain {
+                    if (activeRequest === continuation) {
+                        activeRequest = null
+                        bridge.cancelImagePicker()
+                    }
                 }
             }
             if (activeRequest !== continuation || !continuation.isActive) return@suspendCancellableCoroutine
@@ -88,21 +109,38 @@ class IosImagePickerPlatform(
         }
 
     override fun dispose() {
-        val request = activeRequest ?: return
-        activeRequest = null
-        try {
-            bridge.cancelImagePicker()
-        } finally {
-            request.cancel()
+        val releasedGeneration = generation.fetchAndAdd(1L)
+        onMain {
+            if (activeGeneration <= releasedGeneration) {
+                val request = activeRequest
+                activeRequest = null
+                try {
+                    if (request != null) bridge.cancelImagePicker()
+                } finally {
+                    request?.cancel()
+                }
+            }
         }
     }
 
-    private inline fun finish(
+    private fun finish(
         request: CancellableContinuation<ImagePickerResult>,
         complete: () -> Unit,
     ) {
-        if (activeRequest !== request || !request.isActive) return
-        activeRequest = null
-        complete()
+        onMain {
+            if (activeRequest === request && request.isActive) {
+                activeRequest = null
+                complete()
+            }
+        }
+    }
+
+    private fun onMain(action: () -> Unit) {
+        val main = Dispatchers.Main.immediate
+        if (main.isDispatchNeeded(EmptyCoroutineContext)) {
+            main.dispatch(EmptyCoroutineContext) { action() }
+        } else {
+            action()
+        }
     }
 }
