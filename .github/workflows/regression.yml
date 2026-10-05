@@ -13,6 +13,9 @@ on:
         required: false
 permissions:
   contents: read
+# JVM 启动前设置；Gradle init 时 DNS 策略可能已初始化，不能在那时才改。
+env:
+  JAVA_TOOL_OPTIONS: -Djava.security.properties=${{ github.workspace }}/scripts/ci-java.security
 concurrency:
   group: regression-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
