@@ -66,4 +66,36 @@ class MediaModuleLifecycleTest {
         assertEquals("original.png", picked.fileName)
         assertEquals("image/png", picked.contentType)
     }
+    @Test fun `malformed native base64 fails and releases callback without poisoning next request`() = runTest {
+        val module = MediaModule()
+        val broken = async { module.pick(ImagePickerRequest(ImagePickerSource.GALLERY)) }
+        runCurrent()
+        module.response(selected(JSONArray(listOf(image().apply { put("data", "not-base64!") }))))
+        runCurrent()
+        assertIs<ImagePickerResult.Failed>(broken.await())
+        assertEquals(1, module.removedCallbacks)
+        val retry = async { module.pick(ImagePickerRequest(ImagePickerSource.GALLERY)) }
+        runCurrent()
+        module.response(selected(JSONArray(listOf(image()))))
+        runCurrent()
+        assertIs<ImagePickerResult.Selected>(retry.await())
+        assertEquals(2, module.removedCallbacks)
+    }
+
+    @Test fun `coroutine cancellation tells native which request and late callback cannot revive it`() = runTest {
+        val module = MediaModule()
+        val result = async { module.pick(ImagePickerRequest(ImagePickerSource.GALLERY)) }
+        runCurrent()
+        val late = module.response
+        result.cancel()
+        result.join()
+        assertEquals(1, module.cancelled.size)
+        assertTrue(module.cancelled.single().optString("requestId").isNotBlank())
+        assertEquals(1, module.removedCallbacks)
+        late(selected(JSONArray(listOf(image()))))
+        runCurrent()
+        assertTrue(result.isCancelled)
+        module.dispose()
+    }
+
 }

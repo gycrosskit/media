@@ -16,11 +16,12 @@ const deferred = () => {
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 };
-const flush = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
+// 让本轮异步 I/O 链排空，避免部分读写增加 await 数量后超过固定微任务预算。
+const flush = () => new Promise(resolve => setImmediate(resolve));
 
 function fixture(options = {}) {
   const events = { selected: 0, opened: [], closed: [], written: [], removed: [], decoded: 0,
-    encoded: [], sources: 0, sourceReleased: 0, pixelsReleased: 0, packerReleased: 0, helperReleased: 0 };
+    encoded: [], writes: [], sources: 0, sourceReleased: 0, pixelsReleased: 0, packerReleased: 0, helperReleased: 0 };
   const exports = {};
   let nextFd = 1;
   const files = new Map();
@@ -59,7 +60,7 @@ function fixture(options = {}) {
         if (options.read) return options.read(fd, buffer);
         new Uint8Array(buffer).fill(7); return buffer.byteLength;
       },
-      write: async (fd, bytes) => { events.written.push(files.get(fd)); return bytes.byteLength; },
+      write: async (fd, bytes) => { events.written.push(files.get(fd)); events.writes.push(Array.from(new Uint8Array(bytes))); return options.write ? options.write(files.get(fd), bytes) : bytes.byteLength; },
       unlink: async value => { events.removed.push(value); }
     } },
     '@kit.ArkTS': { util: { generateRandomUUID: () => `instance-${++nextIdentifier}`, Base64Helper: class {
@@ -252,4 +253,49 @@ test('camera cancellation removes only its temporary file when system capture fi
   assert.equal(events.removed.length, 1);
   assert.equal(events.sources, 0);
   assert.equal(responses.length, 1);
+});
+
+
+test('partial reads and writes preserve every byte and close both save descriptors', async () => {
+  const reading = fixture({ read: (_fd, buffer) => { new Uint8Array(buffer)[0] = 7; return 1; } });
+  const picked = invoke(reading.module, 'pick', pick('partial-read'));
+  await flush();
+  assert.equal(picked[0].status, 'selected');
+  assert.deepEqual(Array.from(reading.events.encoded[0]), [7, 7, 7]);
+  assert.equal(reading.events.closed.length, 1);
+  const saving = fixture({ write: (_uri, bytes) => Math.min(1, bytes.byteLength) });
+  const saved = invoke(saving.module, 'save', { requestId: 'partial-write', data: 'AQID' });
+  await flush();
+  assert.equal(saved[0].status, 'saved');
+  assert.deepEqual(saving.events.writes, [[1, 2, 3], [2, 3], [3], [1, 2, 3], [2, 3], [3]]);
+  assert.equal(saving.events.closed.length, 2);
+  assert.equal(saving.events.helperReleased, 1);
+  assert.equal(saving.events.removed.length, 1);
+});
+
+test('zero target write and rejected authorization never report saved and still release resources', async () => {
+  const failure = fixture({ write: uri => uri.startsWith('file://') ? 0 : 3 });
+  const responses = invoke(failure.module, 'save', { requestId: 'target-error', data: 'AQID' });
+  await flush();
+  assert.equal(responses[0].status, 'failed');
+  assert.equal(failure.events.closed.length, 2);
+  assert.equal(failure.events.helperReleased, 1);
+  assert.equal(failure.events.removed.length, 1);
+  const denied = fixture({ dialog: async () => { throw { code: 201 }; } });
+  const deniedResponses = invoke(denied.module, 'save', { requestId: 'denied', data: 'AQID' });
+  await flush();
+  assert.equal(deniedResponses[0].status, 'permission_denied');
+  assert.equal(denied.events.closed.length, 1);
+  assert.equal(denied.events.helperReleased, 1);
+  assert.equal(denied.events.removed.length, 1);
+});
+
+test('camera failure does not masquerade as cancellation and removes its owned temporary file', async () => {
+  const { module, events } = fixture({ capture: async () => ({ resultCode: -1, resultUri: '' }) });
+  const responses = invoke(module, 'pick', { ...pick('capture-failed'), source: 'CAMERA' });
+  await flush();
+  assert.equal(responses[0].status, 'failed');
+  assert.equal(events.opened.length, 1);
+  assert.equal(events.closed.length, 1);
+  assert.equal(events.removed.length, 1);
 });

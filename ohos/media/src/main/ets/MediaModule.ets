@@ -38,6 +38,7 @@ class PendingMediaRequest {
 
 /** 使用系统 Picker 和逐次保存授权，不申请整库读写权限。 */
 export class MediaModule extends KuiklyRenderBaseModule {
+  /** Kuikly 注册名，与 Kotlin 侧常量一致。 */
   static readonly MODULE_NAME: string = 'GycMedia';
   private readonly maxBytes: number = 32 * 1024 * 1024;
   private destroyed: boolean = false;
@@ -49,6 +50,7 @@ export class MediaModule extends KuiklyRenderBaseModule {
 
   syncMode(): boolean { return false; }
 
+  /** 页面线程异步入口；销毁后忽略请求与迟到回调，参数 JSON 属于输入边界。 */
   call(method: string, params: KRAny, callback: KuiklyRenderCallback | null): KRAny {
     if (this.destroyed) { return null; }
     let args: MediaArgs;

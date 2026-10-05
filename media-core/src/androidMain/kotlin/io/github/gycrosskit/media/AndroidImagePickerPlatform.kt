@@ -30,6 +30,8 @@ import kotlinx.coroutines.withContext
  * Android 系统选图统一实现。
  *
  * 每次请求独立注册 Launcher，完成、取消或宿主销毁后立即注销。
+ * @param permission 宿主权限能力，在 Main 调用；业务负责申请时机与提示。
+ * @param fileProviderAuthority 默认 packageName.gycrosskit.media，须与宿主 Manifest 配置一致。
  */
 class AndroidImagePickerPlatform(
     private val activity: ComponentActivity,
