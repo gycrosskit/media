@@ -193,7 +193,7 @@ test('aggregate original bound rejects next image before allocating or image dec
   const { module, events } = fixture({ select: async () => ({ photoUris: ['first', 'second'] }), size: () => MAX_BYTES / 2 + 1 });
   const responses = invoke(module, 'pick', { ...pick('aggregate'), maxCount: 2 });
   await flush();
-  assert.equal(responses[0].status, 'failed');
+  assert.equal(responses[0].status, 'too_large');
   assert.equal(events.sources, 1);
   assert.equal(events.closed.length, 2);
 });
@@ -202,7 +202,7 @@ test('oversized JPEG packing never encodes Base64 and releases all native image 
   const { module, events } = fixture({ packing: async () => new ArrayBuffer(MAX_BYTES + 1) });
   const responses = invoke(module, 'pick', { ...pick('jpeg'), maxDimension: 64, jpegQuality: 85 });
   await flush();
-  assert.equal(responses[0].status, 'failed');
+  assert.equal(responses[0].status, 'too_large');
   assert.equal(events.encoded.length, 0);
   assert.equal(events.sourceReleased, 1);
   assert.equal(events.pixelsReleased, 1);

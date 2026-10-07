@@ -7,6 +7,7 @@ import io.github.gycrosskit.media.ImageSavePlatform
 import io.github.gycrosskit.media.ImageSaveRequest
 import io.github.gycrosskit.media.ImageSaveResult
 import io.github.gycrosskit.media.PickedImage
+import io.github.gycrosskit.media.ImageContentPolicy
 import com.tencent.kuikly.core.module.CallbackRef
 import com.tencent.kuikly.core.module.Module
 import com.tencent.kuikly.core.nvi.serialization.json.JSONObject
@@ -29,6 +30,7 @@ class MediaModule : Module(), ImagePickerPlatform, ImageSavePlatform {
     override fun moduleName(): String = NAME
 
     override suspend fun pick(request: ImagePickerRequest): ImagePickerResult {
+        if (disposed) return ImagePickerResult.Failed("媒体宿主已释放")
         val result = await("pick", JSONObject().apply {
             put("source", request.source.name)
             put("maxCount", request.maxCount)
@@ -72,6 +74,7 @@ class MediaModule : Module(), ImagePickerPlatform, ImageSavePlatform {
             "permission_blocked" -> ImagePickerResult.PermissionBlocked
             "permission_restricted" -> ImagePickerResult.PermissionRestricted
             "busy" -> ImagePickerResult.Failed("系统图片选择器尚未关闭")
+            "too_large" -> ImagePickerResult.Failed(ImageContentPolicy.limitExceededMessage)
             else -> ImagePickerResult.Failed("无法读取图片，请重试")
         }
     }
@@ -135,7 +138,7 @@ class MediaModule : Module(), ImagePickerPlatform, ImageSavePlatform {
         /** 原生模块注册名；入口和协程恢复由宿主保持在 Kuikly 页面线程。 */
         const val NAME = "GycMedia"
         // ponytail: JSON Base64 增加临时内存；单次媒体限 32 MiB，大文件需求改用分块二进制桥。
-        private const val MAX_BYTES = 32 * 1024 * 1024
+        private const val MAX_BYTES = ImageContentPolicy.maxBytes
         private const val MAX_ENCODED_LENGTH = ((MAX_BYTES + 2) / 3) * 4
     }
 }

@@ -7,7 +7,11 @@ struct ImageSelectionPolicy {
     let maxDimension: CGFloat
     /// JPEG 编码质量，范围 0...1；由 shared 的百分比参数转换而来。
     let quality: CGFloat
+    /// 单张 JPEG 编码预算，默认与 shared 相同；与原始编码的总量检查分开。
+    var maxEncodedBytes: Int = MediaClient.maxBytes
 }
+
+enum ImageSelectionError: Error { case tooLarge }
 
 /** Swift 内部图片快照；三个字段共同组成 shared 上传边界的一项结果。 */
 struct SelectedImage {
@@ -24,11 +28,16 @@ enum ImageSelectionProcessor {
         suggestedName: String?,
         typeIdentifier: String,
         policy: ImageSelectionPolicy?
-    ) -> SelectedImage? {
+    ) throws -> SelectedImage? {
+        guard !data.isEmpty else { return nil }
+        guard data.count <= MediaClient.maxBytes else { throw ImageSelectionError.tooLarge }
         if let policy {
             guard let image = UIImage(data: data),
                   let compressed = compress(image: image, policy: policy) else {
                 return nil
+            }
+            guard compressed.count <= min(policy.maxEncodedBytes, MediaClient.maxBytes) else {
+                throw ImageSelectionError.tooLarge
             }
             return SelectedImage(
                 data: compressed,

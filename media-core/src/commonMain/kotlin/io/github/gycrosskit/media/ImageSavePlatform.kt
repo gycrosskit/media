@@ -19,11 +19,12 @@ enum class ImageSaveResult {
     PERMISSION_DENIED,
     PERMISSION_BLOCKED,
     PERMISSION_RESTRICTED,
+    /** 空数据、超过 ImageContentPolicy 限额、系统不支持的编码或损坏图片；未开始写入。 */
     INVALID_CONTENT,
     FAILED,
 }
 
-/** Android/iOS 写入系统相册的最小平台能力。 */
+/** 三端写入系统相册的最小平台能力；遵循 ImageContentPolicy，原始编码不重写。 */
 fun interface ImageSavePlatform {
     /** 等待系统保存结果；取消只结束本地等待，已开始的原生写入不保证可撤销。 */
     suspend fun save(request: ImageSaveRequest): ImageSaveResult

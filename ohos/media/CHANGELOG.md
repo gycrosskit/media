@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.1.6（待发布候选）
+
+选图原始/输出总量维持 32 MiB，超限返回 too_large，配套 Maven 映射为 Failed(limitExceededMessage)；取消、权限和保存 INVALID_CONTENT 协议保持。
+
 ## 0.1.5
 
 保存先核对 PNG/JPEG/WebP 结束边界并实际解码/释放小 PixelMap，再写原字节；取消/销毁不进入授权或文件写入。非法文件名前缀类型前置返回 invalid_content。maxCount合同为1..500。

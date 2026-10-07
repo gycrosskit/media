@@ -6,7 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import platform.Foundation.NSData
-import kotlin.concurrent.atomics.AtomicLong
+import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.resume
@@ -17,18 +17,16 @@ class IosImagePickerPlatform(
     private val bridge: IosMediaSdkBridge,
 ) : ImagePickerPlatform {
     private var activeRequest: CancellableContinuation<ImagePickerResult>? = null
-    private var activeGeneration = 0L
-    private val generation = AtomicLong(0L)
+    private val disposed = AtomicBoolean(false)
 
     override suspend fun pick(request: ImagePickerRequest): ImagePickerResult {
-        val epoch = generation.load()
+        if (disposed.load()) return ImagePickerResult.Failed("媒体宿主已释放")
         val result = withContext(Dispatchers.Main.immediate) {
-            if (epoch != generation.load()) throw CancellationException("图片选择宿主已释放")
-            activeGeneration = epoch
+            if (disposed.load()) throw CancellationException("图片选择宿主已释放")
             pickOnMain(request)
         }
         // 回调已经完成也不能越过宿主释放，交付前在消费线程核对释放代次。
-        if (epoch != generation.load()) throw CancellationException("图片选择宿主已释放")
+        if (disposed.load()) throw CancellationException("图片选择宿主已释放")
         return result
     }
 
@@ -39,11 +37,19 @@ class IosImagePickerPlatform(
             // Swift pickImages 负责替换原生 Picker；先交接所有权，旧协程取消时才不会关闭新请求。
             previous?.cancel()
             val images = mutableListOf<PickedImage>()
+            var totalBytes = 0L
+            var exceedsLimit = false
             val callback = object : IosImagePickerSdkCallback {
                 override fun onImage(data: NSData, fileName: String, contentType: String) {
                     onMain {
                         if (activeRequest === continuation && continuation.isActive) {
-                            images += PickedImage(data.toByteArray(), fileName, contentType)
+                            totalBytes += data.length.toLong()
+                            if (totalBytes > ImageContentPolicy.maxBytes) {
+                                exceedsLimit = true
+                                images.clear()
+                            } else if (!exceedsLimit) {
+                                images += PickedImage(data.toByteArray(), fileName, contentType)
+                            }
                         }
                     }
                 }
@@ -51,7 +57,8 @@ class IosImagePickerPlatform(
                 override fun onCompleted() {
                     finish(continuation) {
                         continuation.resume(
-                            images.takeIf(List<PickedImage>::isNotEmpty)
+                            if (exceedsLimit) ImagePickerResult.Failed(ImageContentPolicy.limitExceededMessage)
+                            else images.takeIf(List<PickedImage>::isNotEmpty)
                                 ?.let(ImagePickerResult::Selected)
                                 ?: ImagePickerResult.Cancelled,
                         )
@@ -109,16 +116,14 @@ class IosImagePickerPlatform(
         }
 
     override fun dispose() {
-        val releasedGeneration = generation.fetchAndAdd(1L)
+        if (!disposed.compareAndSet(false, true)) return
         onMain {
-            if (activeGeneration <= releasedGeneration) {
-                val request = activeRequest
-                activeRequest = null
-                try {
-                    if (request != null) bridge.cancelImagePicker()
-                } finally {
-                    request?.cancel()
-                }
+            val request = activeRequest
+            activeRequest = null
+            try {
+                if (request != null) bridge.cancelImagePicker()
+            } finally {
+                request?.cancel()
             }
         }
     }

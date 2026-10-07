@@ -17,6 +17,7 @@ interface MediaArgs {
 }
 interface MediaImage { data: string; fileName: string; contentType: string; }
 interface MediaResult { status: string; images?: MediaImage[]; value?: string; }
+const LIMIT_EXCEEDED: string = 'Image data exceeds 32 MiB';
 
 /** 系统 Picker 不可强制关闭；本次等待可结束，原生收尾仍按自己的请求继续释放资源。 */
 class PendingMediaRequest {
@@ -68,6 +69,7 @@ export class MediaModule extends KuiklyRenderBaseModule {
     const request = new PendingMediaRequest();
     this.requests.set(id, request);
     const operation = this.perform(method, args, request).catch((error: BusinessError): MediaResult => {
+      if (error.message === LIMIT_EXCEEDED) return { status: 'too_large' };
       return { status: error.code === 201 || error.code === 13900012 ? 'permission_denied' : 'failed' };
     });
     Promise.race([operation, request.cancellation]).then((result: MediaResult) => {
@@ -140,7 +142,7 @@ export class MediaModule extends KuiklyRenderBaseModule {
         const original = await this.read(uris[index], this.maxBytes - total, request);
         total += original.byteLength;
         // ponytail: JSON Base64 需要额外内存，单次原图合计限 32 MiB；大图改为二进制分块桥。
-        if (total > this.maxBytes) { return { status: 'failed' }; }
+        if (total > this.maxBytes) { return { status: 'too_large' }; }
         if (this.destroyed || request.cancelled) { return { status: 'cancelled' }; }
         const source = image.createImageSource(original);
         try {
@@ -164,7 +166,8 @@ export class MediaModule extends KuiklyRenderBaseModule {
           }
           if (this.destroyed || request.cancelled) { return { status: 'cancelled' }; }
           outputTotal += bytes.byteLength;
-          if (bytes.byteLength === 0 || outputTotal > this.maxBytes) { return { status: 'failed' }; }
+          if (outputTotal > this.maxBytes) { return { status: 'too_large' }; }
+          if (bytes.byteLength === 0) { return { status: 'failed' }; }
           images.push({ data: this.base64.encodeToStringSync(new Uint8Array(bytes)),
             fileName: `image_${Date.now()}_${index}.${this.extension(mime)}`, contentType: mime });
         } finally { await source.release(); }
@@ -270,7 +273,8 @@ export class MediaModule extends KuiklyRenderBaseModule {
     const file = await fs.open(uri, fs.OpenMode.READ_ONLY);
     try {
       const size = (await fs.stat(file.fd)).size;
-      if (size <= 0 || size > remainingBytes) { throw new Error('Invalid image size'); }
+      if (size > remainingBytes) { throw new Error(LIMIT_EXCEEDED); }
+      if (size <= 0) { throw new Error('Invalid image size'); }
       if (this.destroyed || request.cancelled) { throw new Error('Media request cancelled'); }
       const result = new Uint8Array(size);
       let offset = 0;
