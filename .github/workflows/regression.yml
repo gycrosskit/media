@@ -32,6 +32,7 @@ jobs:
           persist-credentials: false
       - run: npm install --prefix "$RUNNER_TEMP/ci-tools" --ignore-scripts --no-audit --no-fund typescript@4.9.5
       - run: |
+          python3 verification/ci/test_fork_host.py
           python3 scripts/test-check-maven.py
           python3 scripts/test-jitpack-metadata.py
           TYPESCRIPT_PATH="$RUNNER_TEMP/ci-tools/node_modules/typescript" node --test ohos/media/test/media.test.cjs
@@ -47,6 +48,7 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
+      - run: bash scripts/ci-pin-fork-host.sh
       - run: test -f "$ANDROID_HOME/platforms/android-36/android.jar"
       - run: bash gradlew --init-script "$PWD/scripts/ci-repositories.gradle" --info :media-core:testDebugUnitTest :media-core:compileDebugKotlinAndroid --no-daemon --max-workers=1
       - run: |
@@ -63,6 +65,7 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
+      - run: bash scripts/ci-pin-fork-host.sh
       - run: |
           case "$(uname -m)" in
             arm64) native_target=IosSimulatorArm64; native_test=iosSimulatorArm64Test ;;
@@ -97,6 +100,7 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
+      - run: bash scripts/ci-pin-fork-host.sh
       - run: test -f "$ANDROID_HOME/platforms/android-36/android.jar"
       - run: bash scripts/ci-release.sh
       - run: bash gradlew --init-script "$PWD/scripts/ci-repositories.gradle" --info -p verification-consumer compileDebugKotlinAndroid -PmediaVersion="$VERSION" --refresh-dependencies --no-daemon --max-workers=1
@@ -115,6 +119,7 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
+      - run: bash scripts/ci-pin-fork-host.sh
       - run: bash scripts/ci-release.sh
       - run: |
           case "$(uname -m)" in
