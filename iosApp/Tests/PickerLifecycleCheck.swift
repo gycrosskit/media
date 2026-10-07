@@ -1,5 +1,6 @@
 import UIKit
 import PhotosUI
+import UniformTypeIdentifiers
 @testable import GycMedia
 
 private final class Callback: MediaPickerCallback {
@@ -96,6 +97,19 @@ private func runChecks(window: UIWindow) async {
     let saveCallback = SaveCallback()
     MediaClient.shared.saveImage(data: truncated, fileNamePrefix: "partial", callback: saveCallback)
     precondition(saveCallback.invalid == 1, "Production save must reject before Photos authorization")
+    MediaClient.shared.saveImage(data: Data(count: MediaClient.maxBytes + 1), fileNamePrefix: "large", callback: saveCallback)
+    precondition(saveCallback.invalid == 2, "Oversized data must not inspect Photos authorization")
+    // 合法 PNG 可读取；JPEG 超限必须保留原因给 caller，不能降成可跳过的 nil。小预算执行真实 UIKit 编码。
+    let validSelection = try! ImageSelectionProcessor.selectedImage(
+        data: encoded, suggestedName: "valid.png", typeIdentifier: UTType.png.identifier, policy: nil)
+    precondition(validSelection != nil)
+    let smallBudget = ImageSelectionPolicy(maxDimension: 2, quality: 1, maxEncodedBytes: 64)
+    do {
+        _ = try ImageSelectionProcessor.selectedImage(
+            data: encoded, suggestedName: "large.png", typeIdentifier: UTType.png.identifier, policy: smallBudget)
+        fatalError("Oversized JPEG output must retain its limit classification")
+    } catch ImageSelectionError.tooLarge {} catch { fatalError("Unexpected selection error: \(error)") }
+    print("PASS: JPEG output limit classification and valid PNG companion processor")
     print("PASS: Save content boundary PNG/JPEG, preserved trailing bytes and production invalid callback")
     let unused = Controller()
     var completed = 0

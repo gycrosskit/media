@@ -1,6 +1,6 @@
 {
   "name": "@gycrosskit/media",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "HarmonyOS 图片选择、拍照、压缩和相册保存",
   "main": "Index.ets",
   "author": {

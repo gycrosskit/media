@@ -3,6 +3,7 @@ package io.github.gycrosskit.media
 import android.Manifest
 import android.content.ContentValues
 import android.graphics.ImageDecoder
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -18,7 +19,7 @@ class AndroidImageSavePlatform(
     private val permission: suspend (String) -> MediaPermissionState,
 ) : ImageSavePlatform {
     override suspend fun save(request: ImageSaveRequest): ImageSaveResult {
-        if (request.bytes.isEmpty()) return ImageSaveResult.INVALID_CONTENT
+        if (request.bytes.isEmpty() || request.bytes.size > ImageContentPolicy.maxBytes) return ImageSaveResult.INVALID_CONTENT
         val format = withContext(Dispatchers.IO) { request.bytes.detectImageFormat() }
             ?: return ImageSaveResult.INVALID_CONTENT
         ensureLegacyWritePermission()?.let { return it }
@@ -104,7 +105,22 @@ private fun ByteArray.detectImageFormat(): AndroidImageFormat? {
         size >= 12 && decodeToString(0, 4) == "RIFF" && decodeToString(8, 12) == "WEBP" -> {
             AndroidImageFormat(extension = "webp", mimeType = "image/webp")
         }
-        else -> return null
+        else -> {
+            // 不限制为手写的三种签名；系统支持的 GIF/BMP/HEIF 等仍保存原始编码。
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(this, 0, size, bounds)
+            val mime = bounds.outMimeType ?: return null
+            val extension = when (mime) {
+                "image/gif" -> "gif"
+                "image/bmp", "image/x-ms-bmp" -> "bmp"
+                "image/heif" -> "heif"
+                "image/heic" -> "heic"
+                "image/tiff" -> "tiff"
+                "image/avif" -> "avif"
+                else -> return null
+            }
+            AndroidImageFormat(extension, mime)
+        }
     }
     return try {
         // BitmapFactory 接受部分图像；API28+ 用系统 ImageDecoder 拒绝 partial，仍限制验证内存。
@@ -154,7 +170,7 @@ private fun ByteArray.hasCompleteLegacyContainer(extension: String): Boolean = w
         val declared = (0..3).fold(0L) { value, index -> value or ((this[4 + index].toLong() and 255) shl (8 * index)) }
         declared >= 4 && declared + 8 <= size
     }
-    else -> false
+    else -> true // 平台扩展格式由系统实际像素解码校验。
 }
 
 // 跳过 APP/其他带长度的 metadata 段，内嵌缩略图的 EOI 不是主图的结束。

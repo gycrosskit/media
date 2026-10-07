@@ -136,6 +136,7 @@ class AndroidMediaThreadTest {
             for (bytes in listOf(byteArrayOf(-1, -40, -1), byteArrayOf(-119, 80, 78, 71, 13, 10, 26, 10))) {
                 assertEquals(ImageSaveResult.INVALID_CONTENT, saver.save(ImageSaveRequest(bytes, "bad")))
             }
+            assertEquals(ImageSaveResult.INVALID_CONTENT, saver.save(ImageSaveRequest(ByteArray(ImageContentPolicy.maxBytes + 1), "large")))
             assertEquals(0, permissionCalls)
         } finally { controller.destroy() }
     }
@@ -166,6 +167,10 @@ class AndroidMediaThreadTest {
             assertEquals(ImageSaveResult.INVALID_CONTENT, saver.save(ImageSaveRequest(embeddedEnd, "metadata-eoi")))
             assertEquals(ImageSaveResult.PERMISSION_DENIED, saver.save(ImageSaveRequest(jpeg + byteArrayOf(0, 32), "jpeg-tail")))
             assertEquals(3, permissionCalls)
+            val gif = android.util.Base64.decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", android.util.Base64.DEFAULT)
+            assertEquals(ImageSaveResult.PERMISSION_DENIED, saver.save(ImageSaveRequest(gif, "system-gif")),
+                "system-supported GIF must retain its platform capability")
+            assertEquals(4, permissionCalls)
         } finally { controller.destroy(); Dispatchers.resetMain() }
     }
 
@@ -200,7 +205,7 @@ class AndroidMediaThreadTest {
         }
     }
 
-    @Test fun backgroundDisposeCancelsLauncherAndDoesNotPreventNextPick() = runTest {
+    @Test fun backgroundDisposeCancelsLauncherAndPermanentlyClosesPicker() = runTest {
         val main = MainQueueDispatcher()
         Dispatchers.setMain(main)
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).setup()
@@ -216,19 +221,11 @@ class AndroidMediaThreadTest {
             main.runCurrent()
             runCurrent()
             assertTrue(old.isCancelled)
-            val next = async { picker.pick(ImagePickerRequest(ImagePickerSource.GALLERY)) }
-            runCurrent()
-            main.runCurrent()
-            val nextCode = shadowOf(activity).nextStartedActivityForResult.requestCode
-            // 第一条已取消的系统请求仍可迟到，不得结束第二条。
             activity.activityResultRegistry.dispatchResult(oldCode, Activity.RESULT_CANCELED, null)
-            main.runCurrent()
-            runCurrent()
-            assertTrue(!next.isCompleted)
-            activity.activityResultRegistry.dispatchResult(nextCode, Activity.RESULT_CANCELED, null)
-            main.runCurrent()
-            runCurrent()
-            assertEquals(ImagePickerResult.Cancelled, next.await())
+            main.runCurrent(); runCurrent()
+            assertEquals(ImagePickerResult.Failed("媒体宿主已释放"), picker.pick(ImagePickerRequest(ImagePickerSource.GALLERY)))
+            assertEquals(null, shadowOf(activity).nextStartedActivityForResult)
+            picker.dispose()
         } finally {
             picker.dispose()
             controller.destroy()

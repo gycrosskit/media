@@ -17,7 +17,8 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.util.concurrent.atomic.AtomicLong
+import java.io.InputStream
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -40,14 +41,12 @@ class AndroidImagePickerPlatform(
 ) : ImagePickerPlatform {
     private var activeRequest: ActiveImagePickerRequest? = null
     private var sequence = 0L
-    private var activeGeneration = 0L
-    private val generation = AtomicLong()
+    private val disposed = AtomicBoolean()
 
     override suspend fun pick(request: ImagePickerRequest): ImagePickerResult {
-        val epoch = generation.get()
+        if (disposed.get()) return ImagePickerResult.Failed("媒体宿主已释放")
         val result = withContext(Dispatchers.Main.immediate) {
-            if (epoch != generation.get()) throw CancellationException("图片选择宿主已释放")
-            activeGeneration = epoch
+            if (disposed.get()) throw CancellationException("图片选择宿主已释放")
             val ticket = ++sequence
             activeRequest?.cancel()
             if (request.source == ImagePickerSource.CAMERA) {
@@ -58,10 +57,10 @@ class AndroidImagePickerPlatform(
                     MediaPermissionState.RESTRICTED -> return@withContext ImagePickerResult.PermissionRestricted
                 }
             }
-            if (ticket != sequence || epoch != generation.get()) ImagePickerResult.Cancelled else pickAuthorized(request)
+            if (ticket != sequence || disposed.get()) ImagePickerResult.Cancelled else pickAuthorized(request)
         }
         // 原生回调完成后仍可能排队恢复到 Renderer；释放必须同时撤销这段交付窗口。
-        if (epoch != generation.get()) throw CancellationException("图片选择宿主已释放")
+        if (disposed.get()) throw CancellationException("图片选择宿主已释放")
         return result
     }
 
@@ -102,10 +101,30 @@ class AndroidImagePickerPlatform(
                     return
                 }
                 imageReadJob = activity.lifecycleScope.launch {
-                    val images = withContext(Dispatchers.IO) {
-                        uris.distinctBy(Uri::toString)
-                            .take(request.maxCount)
-                            .mapIndexedNotNull { index, uri -> readImage(index, uri, request) }
+                    val images = try {
+                        withContext(Dispatchers.IO) {
+                            var remainingOriginal = ImageContentPolicy.maxBytes
+                            var remainingOutput = ImageContentPolicy.maxBytes
+                            uris.distinctBy(Uri::toString).take(request.maxCount).mapIndexedNotNull { index, uri ->
+                                val original = try {
+                                    activity.contentResolver.openInputStream(uri)?.use { it.readImageBytes(remainingOriginal) }
+                                } catch (error: Exception) {
+                                    if (error is ImageSizeExceeded || error is CancellationException) throw error
+                                    null
+                                }
+                                    ?: return@mapIndexedNotNull null
+                                if (original.isEmpty()) return@mapIndexedNotNull null
+                                remainingOriginal -= original.size
+                                readImage(index, uri, request, original)?.also { image ->
+                                    remainingOutput -= image.bytes.size
+                                    if (remainingOutput < 0) throw ImageSizeExceeded()
+                                }
+                            }
+                        }
+                    } catch (_: ImageSizeExceeded) {
+                        imageReadJob = null
+                        finish(ImagePickerResult.Failed(ImageContentPolicy.limitExceededMessage))
+                        return@launch
                     }
                     imageReadJob = null
                     finish(
@@ -174,14 +193,11 @@ class AndroidImagePickerPlatform(
         }
 
     override fun dispose() {
-        val releasedGeneration = generation.incrementAndGet()
+        if (!disposed.compareAndSet(false, true)) return
         activity.runOnUiThread {
-            // 延迟释放只取消旧代次；dispose 后合法发起的新请求拥有自己的生命周期。
-            if (activeGeneration < releasedGeneration) {
-                sequence++
-                activeRequest?.cancel()
-                activeRequest = null
-            }
+            sequence++
+            activeRequest?.cancel()
+            activeRequest = null
         }
     }
 
@@ -246,14 +262,15 @@ class AndroidImagePickerPlatform(
         index: Int,
         uri: Uri,
         request: ImagePickerRequest,
+        originalBytes: ByteArray,
     ): PickedImage? = runCatching {
         val compression = request.compression
         var encodedAsJpeg = false
         val bytes = if (compression == null) {
-            activity.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            originalBytes
         } else {
-            val original = activity.contentResolver.decodeSampledBitmap(
-                uri = uri,
+            val original = decodeSampledBitmap(
+                bytes = originalBytes,
                 maxDimension = compression.maxDimension,
             )
             if (original == null) {
@@ -335,4 +352,19 @@ class AndroidImagePickerPlatform(
     private fun interface ActiveImagePickerRequest {
         fun cancel()
     }
+}
+
+private class ImageSizeExceeded : Exception()
+
+/** 先限制原始编码内存，再解码/压缩；未知长度的系统流也不能绕过单次总量。 */
+internal fun InputStream.readImageBytes(limit: Int): ByteArray = ByteArrayOutputStream().use { output ->
+    val buffer = ByteArray(8192)
+    while (true) {
+        val count = read(buffer, 0, minOf(buffer.size, limit - output.size() + 1))
+        if (count < 0) break
+        if (count == 0) continue
+        if (count > limit - output.size()) throw ImageSizeExceeded()
+        output.write(buffer, 0, count)
+    }
+    output.toByteArray()
 }

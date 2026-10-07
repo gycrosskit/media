@@ -7,6 +7,9 @@ import ImageIO
 
 /** 系统图片选择、拍照与相册写入；单次 Picker 的回调由请求 ID 隔离。 */
 public final class MediaClient: NSObject {
+    // 与 common ImageContentPolicy 一致；系统选择器回传后立即检查，压缩不绕过原始编码限额。
+    static let maxBytes = 32 * 1024 * 1024
+    static let limitExceededMessage = "图片数据超过 32 MiB 限额"
     /// 系统相机/相册一次只能展示一个，进程内复用同一 Bridge 并以请求 ID 隔离迟到回调。
     public static let shared = MediaClient()
 
@@ -140,7 +143,7 @@ public final class MediaClient: NSObject {
     public func saveImage(data: Data, fileNamePrefix: String, callback: MediaSaveCallback) {
         UIKitExecutionContext.run { [weak self] in
             guard let self else { return }
-            guard Self.isValidImageForSave(data) else {
+            guard data.count <= Self.maxBytes, Self.isValidImageForSave(data) else {
                 callback.onInvalidContent()
                 return
             }
@@ -381,28 +384,42 @@ extension MediaClient: UIImagePickerControllerDelegate, UINavigationControllerDe
         let url = info[.imageURL] as? URL
         let image = info[.originalImage] as? UIImage
         DispatchQueue.global(qos: .userInitiated).async {
-            let selected = autoreleasepool { () -> SelectedImage? in
-                if let url, let data = try? Data(contentsOf: url),
-                   let type = UTType(filenameExtension: url.pathExtension),
-                   let selected = ImageSelectionProcessor.selectedImage(
+            var exceedsLimit = false
+            let selected: SelectedImage?
+            do {
+                selected = try autoreleasepool { () throws -> SelectedImage? in
+                if let url {
+                    if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+                       size > Self.maxBytes { exceedsLimit = true; return nil }
+                    if let data = try? Data(contentsOf: url) {
+                        guard data.count <= Self.maxBytes else { exceedsLimit = true; return nil }
+                        if let type = UTType(filenameExtension: url.pathExtension),
+                           let selected = try ImageSelectionProcessor.selectedImage(
                         data: data,
                         suggestedName: url.lastPathComponent,
                         typeIdentifier: type.identifier,
                         policy: request.compression
-                   ) {
-                    return selected
+                           ) { return selected }
+                    }
                 }
                 guard let data = image?.jpegData(compressionQuality: 1) else { return nil }
-                return ImageSelectionProcessor.selectedImage(
+                guard data.count <= Self.maxBytes else { exceedsLimit = true; return nil }
+                return try ImageSelectionProcessor.selectedImage(
                     data: data,
                     suggestedName: nil,
                     typeIdentifier: UTType.jpeg.identifier,
                     policy: request.compression
                 )
-            }
+                }
+            } catch ImageSelectionError.tooLarge {
+                exceedsLimit = true
+                selected = nil
+            } catch { selected = nil }
             UIKitExecutionContext.run {
                 guard self.pickerRequest?.id == request.id, self.pickerController === picker else { return }
-                if let selected {
+                if exceedsLimit {
+                    self.finishPicker(error: Self.limitExceededMessage)
+                } else if let selected {
                     self.completePicker([selected])
                 } else {
                     self.finishPicker(error: "无法读取拍摄的图片")
@@ -424,6 +441,9 @@ extension MediaClient: PHPickerViewControllerDelegate {
         let lock = NSLock()
         let policy = request.compression
         var loaded = Array<SelectedImage?>(repeating: nil, count: results.count)
+        var originalBytes = 0
+        var outputBytes = 0
+        var exceedsLimit = false
         for (index, result) in results.enumerated() {
             let provider = result.itemProvider
             guard let typeIdentifier = ImageSelectionProcessor.imageTypeIdentifier(for: provider) else { continue }
@@ -431,14 +451,26 @@ extension MediaClient: PHPickerViewControllerDelegate {
             provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { data, _ in
                 defer { group.leave() }
                 guard let data else { return }
-                let image = ImageSelectionProcessor.selectedImage(
-                    data: data,
-                    suggestedName: provider.suggestedName,
-                    typeIdentifier: typeIdentifier,
-                    policy: policy
-                )
                 lock.lock()
-                loaded[index] = image
+                originalBytes += data.count
+                exceedsLimit = exceedsLimit || originalBytes > Self.maxBytes
+                let shouldRead = !exceedsLimit
+                lock.unlock()
+                guard shouldRead else { return }
+                let image: SelectedImage?
+                do {
+                    image = try ImageSelectionProcessor.selectedImage(
+                        data: data, suggestedName: provider.suggestedName,
+                        typeIdentifier: typeIdentifier, policy: policy
+                    )
+                } catch ImageSelectionError.tooLarge {
+                    lock.lock(); exceedsLimit = true; lock.unlock()
+                    return
+                } catch { return }
+                lock.lock()
+                outputBytes += image?.data.count ?? 0
+                exceedsLimit = exceedsLimit || outputBytes > Self.maxBytes
+                if !exceedsLimit { loaded[index] = image }
                 lock.unlock()
             }
         }
@@ -447,7 +479,9 @@ extension MediaClient: PHPickerViewControllerDelegate {
                   self.pickerRequest?.id == request.id,
                   self.pickerController === picker else { return }
             let images = loaded.compactMap { $0 }
-            if images.isEmpty {
+            if exceedsLimit {
+                finishPicker(error: Self.limitExceededMessage)
+            } else if images.isEmpty {
                 finishPicker(error: "无法读取所选图片")
             } else {
                 completePicker(images)

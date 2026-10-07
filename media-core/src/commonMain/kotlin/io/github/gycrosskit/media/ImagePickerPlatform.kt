@@ -100,6 +100,6 @@ interface ImagePickerPlatform {
      */
     suspend fun pick(request: ImagePickerRequest): ImagePickerResult
 
-    /** 平台宿主销毁时取消待处理请求并注销临时回调。 */
+    /** 宿主销毁时幂等取消待处理请求并注销回调；终态，后续 pick 返回 Failed，重用须新建实例。 */
     fun dispose()
 }

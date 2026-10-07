@@ -77,7 +77,7 @@ class IosImagePickerThreadTest {
         }
     }
 
-    @Test fun disposeAfterNativeCompletionCancelsQueuedDeliveryAndAllowsNewRequest() = runTest {
+    @Test fun disposeAfterNativeCompletionCancelsQueuedDeliveryAndIsTerminal() = runTest {
         val main = MainQueueDispatcher()
         Dispatchers.setMain(main)
         val bridge = PickerBridge()
@@ -91,13 +91,9 @@ class IosImagePickerThreadTest {
             picker.dispose()
             runCurrent()
             assertFailsWith<CancellationException> { result.await() }
-            val next = async { picker.pick(ImagePickerRequest(ImagePickerSource.GALLERY)) }
-            runCurrent()
-            main.runCurrent()
-            bridge.callbacks.last().onCancelled()
-            main.runCurrent()
-            runCurrent()
-            assertEquals(ImagePickerResult.Cancelled, next.await())
+            assertEquals(ImagePickerResult.Failed("媒体宿主已释放"), picker.pick(ImagePickerRequest(ImagePickerSource.GALLERY)))
+            assertEquals(1, bridge.callbacks.size)
+            picker.dispose()
         } finally {
             picker.dispose()
             main.runCurrent()
@@ -119,6 +115,9 @@ class IosImagePickerThreadTest {
             }
         }
         try {
+            assertEquals(ImageSaveResult.INVALID_CONTENT,
+                IosImageSavePlatform(bridge).save(ImageSaveRequest(ByteArray(ImageContentPolicy.maxBytes + 1), "large")))
+            assertEquals(0, saveCalls, "oversized data never enters the system bridge")
             val result = async { IosImageSavePlatform(bridge).save(ImageSaveRequest(byteArrayOf(1), "photo")) }
             runCurrent()
             assertEquals(0, saveCalls)

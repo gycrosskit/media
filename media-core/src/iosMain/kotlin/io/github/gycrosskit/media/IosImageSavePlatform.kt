@@ -10,7 +10,7 @@ class IosImageSavePlatform(
     private val bridge: IosMediaSdkBridge,
 ) : ImageSavePlatform {
     override suspend fun save(request: ImageSaveRequest): ImageSaveResult {
-        if (request.bytes.isEmpty()) return ImageSaveResult.INVALID_CONTENT
+        if (request.bytes.isEmpty() || request.bytes.size > ImageContentPolicy.maxBytes) return ImageSaveResult.INVALID_CONTENT
         return withContext(Dispatchers.Main.immediate) {
             suspendCancellableCoroutine { continuation ->
                 if (!continuation.isActive) return@suspendCancellableCoroutine
