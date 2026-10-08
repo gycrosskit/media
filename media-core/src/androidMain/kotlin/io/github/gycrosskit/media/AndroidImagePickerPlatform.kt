@@ -39,7 +39,7 @@ class AndroidImagePickerPlatform(
     private val permission: suspend (String) -> MediaPermissionState,
     private val fileProviderAuthority: String = "${activity.packageName}.gycrosskit.media",
 ) : ImagePickerPlatform {
-    private var activeRequest: ActiveImagePickerRequest? = null
+    private var activeRequest: (() -> Unit)? = null
     private var sequence = 0L
     private val disposed = AtomicBoolean()
 
@@ -48,7 +48,7 @@ class AndroidImagePickerPlatform(
         val result = withContext(Dispatchers.Main.immediate) {
             if (disposed.get()) throw CancellationException("图片选择宿主已释放")
             val ticket = ++sequence
-            activeRequest?.cancel()
+            activeRequest?.invoke()
             if (request.source == ImagePickerSource.CAMERA) {
                 when (permission(Manifest.permission.CAMERA)) {
                     MediaPermissionState.GRANTED -> Unit
@@ -66,14 +66,14 @@ class AndroidImagePickerPlatform(
 
     private suspend fun pickAuthorized(request: ImagePickerRequest): ImagePickerResult =
         suspendCancellableCoroutine { continuation ->
-            activeRequest?.cancel()
+            activeRequest?.invoke()
             val registry = activity.activityResultRegistry
             val suffix = "${System.identityHashCode(this)}_${System.nanoTime()}"
             var cameraOutputUri: Uri? = null
             var cameraOutputFile: File? = null
             var imageReadJob: Job? = null
             val launchers = mutableListOf<ActivityResultLauncher<*>>()
-            lateinit var requestOwner: ActiveImagePickerRequest
+            lateinit var requestOwner: () -> Unit
 
             fun cleanup() {
                 imageReadJob?.cancel()
@@ -135,7 +135,7 @@ class AndroidImagePickerPlatform(
                 }
             }
 
-            requestOwner = ActiveImagePickerRequest {
+            requestOwner = {
                 cleanup()
                 continuation.cancel()
             }
@@ -156,27 +156,23 @@ class AndroidImagePickerPlatform(
                         }
                         launchers += cameraLauncher
 
-                        fun launchCamera() {
-                            runCatching {
-                                val imageFile = File(
-                                    activity.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
-                                    "picked_$suffix.jpg",
-                                ).apply { parentFile?.mkdirs() }
-                                cameraOutputFile = imageFile
-                                val uri = FileProvider.getUriForFile(
-                                    activity,
-                                    fileProviderAuthority,
-                                    imageFile,
-                                )
-                                cameraOutputUri = uri
-                                cameraLauncher.launch(uri)
-                            }.onFailure {
-                                android.util.Log.e("GycMedia", "打开系统相机失败", it)
-                                finish(ImagePickerResult.Failed("无法打开系统相机"))
-                            }
+                        runCatching {
+                            val imageFile = File(
+                                activity.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
+                                "picked_$suffix.jpg",
+                            ).apply { parentFile?.mkdirs() }
+                            cameraOutputFile = imageFile
+                            val uri = FileProvider.getUriForFile(
+                                activity,
+                                fileProviderAuthority,
+                                imageFile,
+                            )
+                            cameraOutputUri = uri
+                            cameraLauncher.launch(uri)
+                        }.onFailure {
+                            android.util.Log.e("GycMedia", "打开系统相机失败", it)
+                            finish(ImagePickerResult.Failed("无法打开系统相机"))
                         }
-
-                        launchCamera()
                     }
                     ImagePickerSource.GALLERY -> launchGallery(
                         suffix = suffix,
@@ -196,7 +192,7 @@ class AndroidImagePickerPlatform(
         if (!disposed.compareAndSet(false, true)) return
         activity.runOnUiThread {
             sequence++
-            activeRequest?.cancel()
+            activeRequest?.invoke()
             activeRequest = null
         }
     }
@@ -349,9 +345,6 @@ class AndroidImagePickerPlatform(
         )
     }
 
-    private fun interface ActiveImagePickerRequest {
-        fun cancel()
-    }
 }
 
 private class ImageSizeExceeded : Exception()
