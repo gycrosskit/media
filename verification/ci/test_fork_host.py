@@ -34,7 +34,11 @@ elif '--resolve' in args:
     assert args[args.index('--resolve') + 1] == 'maven.eazytec-cloud.com:443:61.177.127.227'
     if os.environ['MOCK_CASE'] == 'doh_tls':
         sys.exit(35)
-    print('200 ' + ('8.8.8.8' if os.environ['MOCK_CASE'] == 'doh_mismatch' else '61.177.127.227'), end='')
+    if os.environ['MOCK_CASE'] in ['fallback_tls', 'fallback_http', 'fallback_unreachable', 'fallback_read_timeout']:
+        case = os.environ['MOCK_CASE']
+        print('000 0.000000' if case == 'fallback_unreachable' else '000 61.177.127.227 0.100000', end='')
+        sys.exit({'fallback_tls': 35, 'fallback_http': 22, 'fallback_unreachable': 28, 'fallback_read_timeout': 28}[case])
+    print('200 ' + ('8.8.8.8' if os.environ['MOCK_CASE'] in ['doh_mismatch', 'fallback_mismatch'] else '61.177.127.227') + ' 0.100000', end='')
 else:
     assert url.startswith('https://maven.eazytec-cloud.com/') and url.endswith('.pom')
     case = os.environ['MOCK_CASE']
@@ -42,11 +46,18 @@ else:
         sys.exit(6)
     if case in ['tls', 'http']:
         sys.exit(35 if case == 'tls' else 22)
+    if case in ['tls_timeout', 'read_timeout']:
+        print('000 61.177.127.227 0.100000', end='')
+        sys.exit(28)
+    if case.startswith('fallback_'):
+        print('000 0.000000', end='')
+        sys.exit(6 if case == 'fallback_dns' else 7 if case == 'fallback_refused' else 28)
     if case in ['timeout_recovered', 'connect_recovered', 'timeout_exhausted']:
         attempts = len(Path(os.environ['MOCK_CALLS']).read_text().splitlines())
         if case == 'timeout_exhausted' or attempts < 3:
+            print('000 0.000000', end='')
             sys.exit(7 if case == 'connect_recovered' else 28)
-    print('200 ' + ('127.0.0.1' if case == 'private' else '61.177.127.227'), end='')
+    print('200 ' + ('127.0.0.1' if case == 'private' else '61.177.127.227') + ' 0.100000', end='')
 ''')
     (root / 'sudo').write_text('''#!/usr/bin/env python3
 import os, sys
@@ -64,7 +75,11 @@ Path(os.environ['MOCK_HOSTS']).write_text(sys.stdin.read())
                        MOCK_HOSTS=str(root / 'hosts'), MOCK_CALLS=str(root / 'calls'))
     cases = ['outside_ci', 'self_hosted', 'normal', 'write_failure', 'private', 'tls', 'http',
              'timeout_recovered', 'connect_recovered', 'timeout_exhausted',
-             'doh_bad_status', 'doh_wrong_question', 'doh_wrong_owner', 'doh_private', 'doh_tls', 'doh_mismatch', 'doh_valid']
+             'tls_timeout', 'read_timeout', 'fallback_valid', 'fallback_private', 'fallback_invalid',
+             'fallback_dns', 'fallback_refused',
+             'fallback_tls', 'fallback_http', 'fallback_unreachable', 'fallback_read_timeout', 'fallback_mismatch',
+             'doh_bad_status', 'doh_wrong_question', 'doh_wrong_owner', 'doh_private', 'doh_tls', 'doh_mismatch', 'doh_valid',
+             'doh_boolean_question_type', 'doh_boolean_answer_type']
     for case in cases:
         answer = json.loads(json.dumps(ANSWER))
         if case == 'doh_bad_status':
@@ -75,14 +90,21 @@ Path(os.environ['MOCK_HOSTS']).write_text(sys.stdin.read())
             answer['Answer'][0]['name'] = 'other.example.'
         if case == 'doh_private':
             answer['Answer'][0]['data'] = '127.0.0.1'
+        if case == 'doh_boolean_question_type':
+            answer['Question'][0]['type'] = True
+        if case == 'doh_boolean_answer_type':
+            answer['Answer'][0]['type'] = True
         environment.update(MOCK_CASE=case, MOCK_ANSWER=json.dumps(answer),
+                           CI_FORK_HOST_FALLBACK_IP=('127.0.0.1' if case == 'fallback_private' else 'invalid' if case == 'fallback_invalid' else ADDRESS),
                            GITHUB_ACTIONS='false' if case == 'outside_ci' else 'true',
                            RUNNER_ENVIRONMENT='self-hosted' if case == 'self_hosted' else 'github-hosted')
+        if not case.startswith('fallback_') and case not in ['tls', 'http', 'tls_timeout', 'read_timeout', 'outside_ci', 'self_hosted']:
+            environment['CI_FORK_HOST_FALLBACK_IP'] = ''
         for name in ['hosts', 'calls']:
             (root / name).unlink(missing_ok=True)
         result = subprocess.run(['bash', str(SCRIPT)], env=environment, capture_output=True, text=True)
         assert result.returncode == 0, (case, result.stderr)
-        pinned = case in ['normal', 'doh_valid', 'timeout_recovered', 'connect_recovered']
+        pinned = case in ['normal', 'doh_valid', 'timeout_recovered', 'connect_recovered', 'fallback_valid', 'fallback_dns', 'fallback_refused']
         assert (root / 'hosts').exists() == pinned, case
         assert ('job host address reused' in result.stdout) == pinned, case
         if pinned:
@@ -92,7 +114,9 @@ Path(os.environ['MOCK_HOSTS']).write_text(sys.stdin.read())
         if case in ['outside_ci', 'self_hosted']:
             assert not calls, case
         if case in ['timeout_recovered', 'connect_recovered', 'timeout_exhausted']:
-            assert len(calls.splitlines()) == 3, case
-        if case in ['tls', 'http']:
+            assert len(calls.splitlines()) == 3, (case, calls, result.stdout, result.stderr)
+        if case in ['tls', 'http', 'tls_timeout', 'read_timeout']:
             assert len(calls.splitlines()) == 1, case
+        if case.startswith('fallback_'):
+            assert len(calls.splitlines()) == (3 if case in ['fallback_private', 'fallback_invalid'] else 2), case
     print(f'fork host trust boundaries: {len(cases)} cases passed (all hosts writes mocked)')

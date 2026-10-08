@@ -12,19 +12,51 @@ ci_marker_url="https://$ci_dns_host/nexus/repository/maven-public/org/jetbrains/
 ci_curl=(curl --disable --fail --silent --show-error --proto '=https' --ipv4 --noproxy "$ci_dns_host,cloudflare-dns.com" --connect-timeout 20 --max-time 60)
 ci_probe_error=1
 ci_expected_address=""
+ci_fallback_address=""
+if [[ -n "${CI_FORK_HOST_FALLBACK_IP:-}" ]]; then
+    if ! ci_fallback_address="$(python3 - "$CI_FORK_HOST_FALLBACK_IP" <<'PYTHON'
+import ipaddress, sys
+try:
+    address = ipaddress.IPv4Address(sys.argv[1])
+    if not address.is_global or address.is_multicast:
+        sys.exit(1)
+    print(address)
+except ipaddress.AddressValueError:
+    sys.exit(1)
+PYTHON
+    )"; then
+        echo "CI fork configured fallback is not a public IPv4; skipped"
+    fi
+fi
+ci_connect_error=false
 for ci_attempt in 1 2 3; do
     # 不 follow redirect；remote_ip 必须来自原 HTTPS 主机，而非代理或别的域名。
-    if ci_probe="$("${ci_curl[@]}" --output "$ci_probe_dir/marker.pom" --write-out '%{http_code} %{remote_ip}' "$ci_marker_url")"; then
+    if ci_probe="$("${ci_curl[@]}" --output "$ci_probe_dir/marker.pom" --write-out '%{http_code} %{remote_ip} %{time_connect}' "$ci_marker_url")"; then
         ci_probe_error=0
+        ci_connect_error=false
         break
     else
         ci_probe_error=$?
     fi
     echo "CI fork HTTPS address probe failed (attempt $ci_attempt/3, curl exit $ci_probe_error)"
-    # 瞬时连接失败也有限重试；备用 DNS 仍仅处理解析失败，不绕过 HTTP/TLS。
-    if [[ "$ci_probe_error" != 6 && "$ci_probe_error" != 7 && "$ci_probe_error" != 28 ]]; then break; fi
+    # 28 也可能是 TLS/读取超时；仅尚未建立 TCP 的失败可以换地址。
+    ci_connect_error=false
+    if [[ "$ci_probe_error" == 6 || "$ci_probe_error" == 7 || ( "$ci_probe_error" == 28 && "${ci_probe##* }" == 0.000000 ) ]]; then
+        ci_connect_error=true
+    fi
+    if [[ "$ci_connect_error" != true || -n "$ci_fallback_address" ]]; then break; fi
     if [[ "$ci_attempt" != 3 ]]; then sleep 2; fi
 done
+if [[ "$ci_connect_error" == true && -n "$ci_fallback_address" ]]; then
+    # 受控 CI 配置只提供候选；每个 job 仍验证原域名证书、HTTP 200 和实际地址。
+    ci_expected_address="$ci_fallback_address"
+    if ci_probe="$("${ci_curl[@]}" --resolve "$ci_dns_host:443:$ci_expected_address" --output "$ci_probe_dir/marker.pom" --write-out '%{http_code} %{remote_ip} %{time_connect}' "$ci_marker_url")"; then
+        ci_probe_error=0
+    else
+        ci_probe_error=$?
+        echo "CI fork configured fallback probe failed (curl exit $ci_probe_error)"
+    fi
+fi
 if [[ "$ci_probe_error" == 6 ]]; then
     echo "CI system DNS unavailable; trying one Cloudflare DoH A query"
     ci_probe_error=1
@@ -36,10 +68,10 @@ try:
         data = json.load(source)
     host = sys.argv[2]
     questions = data.get('Question', [])
-    if type(data.get('Status')) is not int or data['Status'] != 0 or len(questions) != 1 or questions[0].get('type') != 1 or questions[0].get('name', '').rstrip('.').lower() != host:
+    if type(data.get('Status')) is not int or data['Status'] != 0 or len(questions) != 1 or type(questions[0].get('type')) is not int or questions[0]['type'] != 1 or questions[0].get('name', '').rstrip('.').lower() != host:
         sys.exit(1)
     for answer in data.get('Answer', []):
-        if answer.get('type') != 1 or answer.get('name', '').rstrip('.').lower() != host:
+        if type(answer.get('type')) is not int or answer['type'] != 1 or answer.get('name', '').rstrip('.').lower() != host:
             continue
         address = ipaddress.IPv4Address(answer.get('data', ''))
         if address.is_global and not address.is_multicast:
@@ -51,7 +83,7 @@ sys.exit(1)
 PYTHON
         )"; then
             # DoH 答案不代表产物可用；仍须原域名完整 TLS、200 和实际候选地址一致。
-            if ci_probe="$("${ci_curl[@]}" --resolve "$ci_dns_host:443:$ci_expected_address" --output "$ci_probe_dir/marker.pom" --write-out '%{http_code} %{remote_ip}' "$ci_marker_url")"; then
+            if ci_probe="$("${ci_curl[@]}" --resolve "$ci_dns_host:443:$ci_expected_address" --output "$ci_probe_dir/marker.pom" --write-out '%{http_code} %{remote_ip} %{time_connect}' "$ci_marker_url")"; then
                 ci_probe_error=0
             fi
         fi
@@ -60,7 +92,7 @@ fi
 if [[ "$ci_probe_error" == 0 ]] && ci_address="$(python3 - "$ci_probe" "$ci_expected_address" <<'PYTHON'
 import ipaddress, sys
 parts = sys.argv[1].split()
-if len(parts) != 2 or parts[0] != '200' or (sys.argv[2] and parts[1] != sys.argv[2]):
+if len(parts) != 3 or parts[0] != '200' or (sys.argv[2] and parts[1] != sys.argv[2]):
     sys.exit(1)
 try:
     address = ipaddress.IPv4Address(parts[1])
