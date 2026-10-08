@@ -11,14 +11,18 @@ from pathlib import Path, PurePosixPath
 def documentation(path):
     parts = PurePosixPath(path).parts
     return (len(parts) == 1 and path in ('README.md', 'AGENTS.md', 'CHANGELOG.md')) or (
-        len(parts) > 1 and parts[0] in ('docs', 'skills') and path.endswith('.md'))
+        len(parts) > 1 and parts[0] in ('docs', 'skills') and path.endswith('.md')) or (
+        len(parts) == 3 and parts[0] == 'ohos' and
+        parts[2] in ('README.md', 'CHANGELOG.md') and
+        Path(*parts[:2], 'oh-package.json5').is_file())
 
 
 def source_needed(event_name, event, changed_paths=None):
     if event_name in ('push', 'release'):
         return False
     if event_name == 'workflow_dispatch':
-        return not event.get('inputs', {}).get('version')
+        inputs = event.get('inputs', {})
+        return not inputs.get('version') and inputs.get('warm_native_cache') not in (True, 'true')
     if event_name != 'pull_request' or changed_paths is None:
         return True
     return any(not documentation(path) for path in changed_paths)
@@ -28,6 +32,10 @@ def main():
     event_name = os.environ.get('GITHUB_EVENT_NAME', '')
     try:
         event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+        inputs = event.get('inputs', {})
+        if event_name == 'workflow_dispatch' and inputs.get('warm_native_cache') in (True, 'true'):
+            if os.environ.get('GITHUB_REF') != 'refs/heads/main' or inputs.get('version'):
+                raise SystemExit('Native cache warmup requires main and an empty release version')
         paths = None
         if event_name == 'pull_request':
             pull = event['pull_request']

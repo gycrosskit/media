@@ -14,24 +14,6 @@ core 提供选图、拍照、原图/压缩与相册保存；Android/iOS 由宿�
 
 系统选图、拍照、可选 JPEG 压缩和保存相册。返回图片编码字节、文件名与 MIME；上传、业务大小限制和页面提示由宿主负责。
 
-## 0.1.4 历史 prerelease
-
-Maven 预发行 `0.1.4` 已发布，修复 Android/iOS Picker 的线程、取消与释放交付边界。Android 5 项、iOS Simulator 6 项测试通过，完整 Maven 归档、公开 Release 下载 SHA 和 JitPack 制品审计通过，结果见 [0.1.4 远程发布验收](docs/0.1.4远程发布验收.md)。
-
-| 渠道 | 当时配套版本 | 历史状态 |
-| --- | --- | --- |
-| Maven core/Kuikly | 0.1.4 | 预发行已发布；JitPack 制品审计通过 |
-| Swift Package GycMedia | 0.1.2 | 已验证历史版本；当前 Swift revision 见下节 |
-| HarmonyOS HAR | 0.1.3 | 保留已验证 Release HAR；Registry 可安装状态独立核对 |
-
-历史 0.1.3 标签只提供 HAR；当时 Maven 为 0.1.2，随后预发行 0.1.4。当前版本与状态见本页前部。
-
-## 0.1.5 历史发布状态
-
-Maven core/Kuikly `0.1.5` 已提供 GitHub 预发行，JitPack 的精确标签/提交、完整 publication 和实际文件校验通过。Release HAR 已重下载校验；OHPM 以独立 `candidate-0.1.5` 标签提交审核，精确 Registry 安装仍返回 NOTFOUND，旧 next 保持。全新远程 Maven 的 Android/iOS/OHOS 消费与 Simulator Framework 链接已通过。详情见[0.1.5 发布验收](docs/0.1.5发布验收.md)。 Swift Package 独立 revision `native-0.1.3` 已发布，真实远程解析、iOS14 arm64 device/Simulator SDK 编译与 UIKit 回归通过；KmpMediaBridge 组合真实远程 MediaCore Framework 的 Swift typecheck 已通过。
-
-选图数量合同统一为 `1..500`，系统 Picker 可采用更低上限。Android Launcher 注册/启动异常都会清理 owner；相机临时文件按请求 suffix 隔离。保存保留原始字节：Android API28+ 严格拒绝 partial；API24–27、Swift 和 HAR 先核对 PNG/JPEG/WebP 结束边界再做小尺寸实际解码。兼容解码器对其他编码错误的限制见完整源码审查。HAR 保存的非字符串文件名前缀在任何原生读写前返回 `invalid_content`。
-
 ## 平台与要求
 
 | 平台 | 接入方式 | 系统要求 |
@@ -181,6 +163,8 @@ picker.dispose()
 
 ## 权限与边界
 
+选图数量合同统一为 `1..500`，系统 Picker 可采用更低上限。Android Launcher 注册/启动异常都会清理 owner；相机临时文件按请求 suffix 隔离。保存保留原始字节：Android API28+ 严格拒绝 partial；API24–27、Swift 和 HAR 先核对 PNG/JPEG/WebP 结束边界再做小尺寸实际解码。兼容解码器对其他编码错误的限制见完整源码审查。HAR 保存的非字符串文件名前缀在任何原生读写前返回 `invalid_content`。
+
 Android 声明 `CAMERA`；API 28 及以下保存相册还需 `WRITE_EXTERNAL_STORAGE`（`maxSdkVersion="28"`）。系统选图不申请整库读取权限。iOS 填写 `NSCameraUsageDescription`、`NSPhotoLibraryAddUsageDescription`，PHPicker 不读取整库授权，保存请求 `.addOnly`。
 
 取消、拒绝权限、已阻止权限、设备策略限制和失败分开返回。Android/iOS 的新 Picker 替换旧请求；原生平台的 `pick()`、`save()` 和 `dispose()` 可从调用方线程进入，SDK、权限与 Picker 状态由组件切到主线程。`dispose()` 立即撤销已回调但尚未交付的结果，释放是终态，同实例后续 pick 返回 Failed，宿主须创建新实例。HarmonyOS 系统 Picker 忙时返回失败，Kotlin Module 销毁时 `dispose()`。
@@ -200,7 +184,13 @@ iOS/HarmonyOS 按系统图像解码能力识别格式。不提供视频、上传
 
 组件源码使用 Apache-2.0，见 [LICENSE](LICENSE)。Kuikly 和平台 SDK 遵循各自许可。
 
-历史 0.1.5 制品校验与远程状态见 [0.1.5 发布验收](docs/0.1.5发布验收.md)；历史记录见 [0.1.4 发布验收](docs/0.1.4远程发布验收.md)及 [0.1.3 HAR 发布验收](docs/发布验收-0.1.3.md)。
+## 历史发布记录
+
+以下记录保留对应版本、渠道与验收时点，不替代顶部当前功能和安装基线。
+
+- <a id="015-历史发布状态"></a>[0.1.5 发布验收](docs/0.1.5发布验收.md)。
+- <a id="014-历史-prerelease"></a>[0.1.4 远程发布验收](docs/0.1.4远程发布验收.md)。
+- [0.1.3 HAR 发布验收](docs/发布验收-0.1.3.md)、[历史渠道配对](CHANGELOG.md#har-013)。
 
 ## 自动回归
 

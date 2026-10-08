@@ -7,6 +7,10 @@ on:
     types: [published]
   workflow_dispatch:
     inputs:
+      warm_native_cache:
+        description: Warm Native toolchains on main only (leave version empty)
+        type: boolean
+        default: false
       version:
         description: Immutable release tag to verify (empty runs source regression)
         type: string
@@ -157,14 +161,19 @@ jobs:
           retention-days: 7
   native:
     needs: changes
-    if: needs.changes.outputs.source == 'true'
+    if: (needs.changes.outputs.source == 'true') || (github.event_name == 'workflow_dispatch' && inputs.warm_native_cache && github.ref == 'refs/heads/main')
     runs-on: macos-15
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
+      - name: Identify Native toolchain and Xcode
+        if: (needs.changes.outputs.source == 'true') || (github.event_name == 'workflow_dispatch' && inputs.warm_native_cache && github.ref == 'refs/heads/main')
+        id: native-key
+        run: python3 scripts/ci-native-cache.py --key >> "$GITHUB_OUTPUT"
       - name: Restore complete Kotlin Native toolchains
+        if: (needs.changes.outputs.source == 'true') || (github.event_name == 'workflow_dispatch' && inputs.warm_native_cache && github.ref == 'refs/heads/main')
         id: konan-cache
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
@@ -175,15 +184,18 @@ jobs:
             !~/.konan/**/*.part
             !~/.konan/**/*.tmp
             !~/.konan/**/*.lock
-          key: konan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('gradle/libs.versions.toml', '**/gradle.properties', '**/build.gradle.kts', '**/settings.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
+          key: ${{ steps.native-key.outputs.key }}
       - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        if: (needs.changes.outputs.source == 'true') || (github.event_name == 'workflow_dispatch' && inputs.warm_native_cache && github.ref == 'refs/heads/main')
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
       - run: bash scripts/ci-pin-fork-host.sh
+        if: (needs.changes.outputs.source == 'true') || (github.event_name == 'workflow_dispatch' && inputs.warm_native_cache && github.ref == 'refs/heads/main')
         timeout-minutes: 5
       - timeout-minutes: 40
+        if: needs.changes.outputs.source == 'true'
         run: |
           case "$(uname -m)" in
             arm64) native_target=IosSimulatorArm64; native_test=iosSimulatorArm64Test ;;
@@ -203,9 +215,14 @@ jobs:
           print(f'Native cases: {len(executed)} executed, {len(cases)-len(executed)} skipped')
           TEST_RESULTS
       - run: python3 scripts/ci-run.py --log ci-diagnostics/native-2.log -- xcrun swiftc -typecheck -target "$(uname -m)-apple-ios15.0-simulator" -sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" iosApp/Sources/GycMedia/*.swift
+        if: needs.changes.outputs.source == 'true'
         timeout-minutes: 10
+      - name: Warm trusted main Native cache
+        if: (github.event_name == 'workflow_dispatch' && inputs.warm_native_cache && github.ref == 'refs/heads/main') && steps.konan-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 40
+        run: python3 scripts/ci-run.py --no-progress-seconds 300 --log ci-diagnostics/native-warmup.log -- python3 scripts/ci-native-cache.py
       - name: Save complete Kotlin Native toolchains
-        if: success() && steps.konan-cache.outputs.cache-hit != 'true'
+        if: success() && ((needs.changes.outputs.source == 'true') || (github.event_name == 'workflow_dispatch' && inputs.warm_native_cache && github.ref == 'refs/heads/main')) && steps.konan-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
@@ -291,6 +308,9 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
+      - name: Identify Native toolchain and Xcode
+        id: native-key
+        run: python3 scripts/ci-native-cache.py --key >> "$GITHUB_OUTPUT"
       - name: Restore complete Kotlin Native toolchains
         id: konan-cache
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -302,7 +322,7 @@ jobs:
             !~/.konan/**/*.part
             !~/.konan/**/*.tmp
             !~/.konan/**/*.lock
-          key: konan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('gradle/libs.versions.toml', '**/gradle.properties', '**/build.gradle.kts', '**/settings.gradle.kts', 'gradle/wrapper/gradle-wrapper.properties') }}
+          key: ${{ steps.native-key.outputs.key }}
       - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
         with:
           distribution: temurin
