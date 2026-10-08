@@ -98,4 +98,22 @@ class MediaModuleLifecycleTest {
         module.dispose()
     }
 
+    @Test fun `duplicate completed picker reply cannot deliver to the next request`() = runTest {
+        val module = MediaModule()
+        val first = async { module.pick(ImagePickerRequest(ImagePickerSource.GALLERY)) }
+        runCurrent()
+        val firstReply = module.response
+        firstReply(selected(JSONArray(listOf(image()))))
+        assertIs<ImagePickerResult.Selected>(first.await())
+        val next = async { module.pick(ImagePickerRequest(ImagePickerSource.GALLERY)) }
+        runCurrent()
+        firstReply(selected(JSONArray(listOf(image()))))
+        runCurrent()
+        assertFalse(next.isCompleted)
+        module.response(JSONObject().apply { put("status", "cancelled") })
+        assertEquals(ImagePickerResult.Cancelled, next.await())
+        assertEquals(2, module.removedCallbacks)
+        module.dispose()
+    }
+
 }

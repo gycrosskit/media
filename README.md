@@ -1,8 +1,16 @@
 # GY CrossKit Media
 
-当前源码新增[跨端行为候选](docs/跨端行为候选.md)，尚未发布；下方远程版本验收仍对应其既有不可变标签。
+## 当前功能与平台边界
 
-[本轮完整源码审查](docs/完整源码审查.md) 列出全部生产文件、公开调用链、实际验证与未测项。
+core 提供选图、拍照、原图/压缩与相册保存；Android/iOS 由宿主接给 CMP 或 Kuikly，media-kuikly 仅提供 OHOS Module。
+
+适用版本：Maven 0.1.7；Swift native-0.1.3 / HAR 0.1.6沿用原字节。本次修复与平台边界见[功能与平台差异](docs/功能与平台差异.md)，构建与渠道验收见[版本发布记录](https://github.com/gycrosskit/media/releases/tag/0.1.7)；下方旧版本记录保留其历史范围。
+
+当前测试覆盖、执行时点和未验收项集中见[验证范围](docs/功能与平台差异.md#验证范围)，复现命令见[开发与验证](docs/开发与验证.md)。
+
+此版本包含已复核的跨端行为修复；[历史源码候选记录](docs/跨端行为候选.md)和下方旧版验收保持其原时点，当前范围见顶部功能与平台差异。
+
+[历史完整源码审查](docs/完整源码审查.md) 列出全部生产文件、公开调用链、实际验证与未测项。
 
 系统选图、拍照、可选 JPEG 压缩和保存相册。返回图片编码字节、文件名与 MIME；上传、业务大小限制和页面提示由宿主负责。
 
@@ -16,9 +24,9 @@ Maven 预发行 `0.1.4` 已发布，修复 Android/iOS Picker 的线程、取消
 | Swift Package GycMedia | 0.1.2 | 已验证历史版本；当前 Swift revision 见下节 |
 | HarmonyOS HAR | 0.1.3 | 保留已验证 Release HAR；Registry 可安装状态独立核对 |
 
-历史 0.1.3 标签只提供 HAR；当时 Maven 为 0.1.2，随后预发行 0.1.4。当前版本与状态见下节。
+历史 0.1.3 标签只提供 HAR；当时 Maven 为 0.1.2，随后预发行 0.1.4。当前版本与状态见本页前部。
 
-## 0.1.5 发布状态
+## 0.1.5 历史发布状态
 
 Maven core/Kuikly `0.1.5` 已提供 GitHub 预发行，JitPack 的精确标签/提交、完整 publication 和实际文件校验通过。Release HAR 已重下载校验；OHPM 以独立 `candidate-0.1.5` 标签提交审核，精确 Registry 安装仍返回 NOTFOUND，旧 next 保持。全新远程 Maven 的 Android/iOS/OHOS 消费与 Simulator Framework 链接已通过。详情见[0.1.5 发布验收](docs/0.1.5发布验收.md)。 Swift Package 独立 revision `native-0.1.3` 已发布，真实远程解析、iOS14 arm64 device/Simulator SDK 编译与 UIKit 回归通过；KmpMediaBridge 组合真实远程 MediaCore Framework 的 Swift typecheck 已通过。
 
@@ -132,19 +140,19 @@ Kuikly group 固定从腾讯 Maven 读取 metadata 和实际产物，避免其�
 
 ```kotlin
 commonMain.dependencies {
-    implementation("com.github.gycrosskit.media:media-core:0.1.5")
+    implementation("com.github.gycrosskit.media:media-core:0.1.7")
 }
 ohosArm64Main.dependencies {
-    implementation("com.github.gycrosskit.media:media-kuikly:0.1.5")
+    implementation("com.github.gycrosskit.media:media-kuikly:0.1.7")
 }
 ```
 
 iOS 在 Xcode 的 Package Dependencies 添加 `https://github.com/gycrosskit/media.git`，选择精确 revision/tag `native-0.1.3`，产品 `GycMedia`（真实远程 SDK/Simulator 回归已验；历史版本为 `0.1.2`）。KMP 不自动导入该 Swift Package，桥接步骤见接入指南。
 
-HarmonyOS 原生包独立安装；本轮 Maven/HAR `0.1.5` 已提供 GitHub 预发行，Release HAR 独立消费已通过。以下 Registry 命令在本轮核验时仍返回 NOTFOUND；审核期间从 [0.1.5 Release](https://github.com/gycrosskit/media/releases/tag/0.1.5) 下载并校验 HAR 后本地安装：
+HarmonyOS 原生包独立安装，当前保留 HAR `0.1.6`。精确 Registry 安装与固定 [0.1.6 Release HAR](https://github.com/gycrosskit/media/releases/tag/0.1.6) 消费分别验收，实际状态见顶部版本发布记录：
 
 ```sh
-ohpm install @gycrosskit/media@0.1.5
+ohpm install @gycrosskit/media@0.1.6
 ```
 
 ## 最小使用
@@ -175,13 +183,13 @@ picker.dispose()
 
 Android 声明 `CAMERA`；API 28 及以下保存相册还需 `WRITE_EXTERNAL_STORAGE`（`maxSdkVersion="28"`）。系统选图不申请整库读取权限。iOS 填写 `NSCameraUsageDescription`、`NSPhotoLibraryAddUsageDescription`，PHPicker 不读取整库授权，保存请求 `.addOnly`。
 
-取消、拒绝权限、已阻止权限、设备策略限制和失败分开返回。Android/iOS 的新 Picker 替换旧请求；原生平台的 `pick()`、`save()` 和 `dispose()` 可从调用方线程进入，SDK、权限与 Picker 状态由组件切到主线程。`dispose()` 立即撤销已回调但尚未交付的结果，延迟清理只取消释放前的请求；后续新请求仍可正常使用实例。HarmonyOS 系统 Picker 忙时返回失败，Kotlin Module 销毁时 `dispose()`。
+取消、拒绝权限、已阻止权限、设备策略限制和失败分开返回。Android/iOS 的新 Picker 替换旧请求；原生平台的 `pick()`、`save()` 和 `dispose()` 可从调用方线程进入，SDK、权限与 Picker 状态由组件切到主线程。`dispose()` 立即撤销已回调但尚未交付的结果，释放是终态，同实例后续 pick 返回 Failed，宿主须创建新实例。HarmonyOS 系统 Picker 忙时返回失败，Kotlin Module 销毁时 `dispose()`。
 新版 Kotlin/HAR 使用 requestId 成对隔离，取消结束自有原生等待、移除回调并阻止后续读写；旧系统 Picker
 返回前仍保持忙状态，不承诺强制关闭系统页面。文件、图像 source/pixels/packer 和相册 helper 在所属原生操作
 退出时由 finally 释放；不可撤回的系统操作需等待它返回，不复用旧 ID，不让旧 cancel 或迟到结果影响新请求。
 
-HarmonyOS 的 JSON/Base64 桥在 decode 前检查单张和合计 32 MiB，原图文件在读取分配前检查剩余额度，
-显式 JPEG 压缩后也检查输出合计再编码。原图不重编码，三类权限结果保持。Android 保存支持 PNG/JPEG/WebP；
+单次输入原图总量、输出结果总量分别不超过 32 MiB。HarmonyOS 的 JSON/Base64 桥在 decode 前检查限额，
+原图文件在读取分配前检查输入剩余额度，显式 JPEG 压缩后检查独立的输出合计再编码。原图不重编码，三类权限结果保持。Android 保存支持 PNG/JPEG/WebP；
 iOS/HarmonyOS 按系统图像解码能力识别格式。不提供视频、上传或扫码。真实设备权限、选择器、相册写入与大图内存仍需宿主验收。
 
 ## 文档与帮助
@@ -192,7 +200,7 @@ iOS/HarmonyOS 按系统图像解码能力识别格式。不提供视频、上传
 
 组件源码使用 Apache-2.0，见 [LICENSE](LICENSE)。Kuikly 和平台 SDK 遵循各自许可。
 
-本轮制品校验与远程状态见 [0.1.5 发布验收](docs/0.1.5发布验收.md)；历史记录见 [0.1.4 发布验收](docs/0.1.4远程发布验收.md)及 [0.1.3 HAR 发布验收](docs/发布验收-0.1.3.md)。
+历史 0.1.5 制品校验与远程状态见 [0.1.5 发布验收](docs/0.1.5发布验收.md)；历史记录见 [0.1.4 发布验收](docs/0.1.4远程发布验收.md)及 [0.1.3 HAR 发布验收](docs/发布验收-0.1.3.md)。
 
 ## 自动回归
 

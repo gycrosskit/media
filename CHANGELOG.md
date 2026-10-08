@@ -1,5 +1,10 @@
 # 更新日志
 
+## 0.1.7（2026-10-08）
+
+- 精简Android Picker单实现层；补正常完成后的重复回执隔离测试；明确dispose为终态。
+- 更新功能、测试覆盖与平台差异文档；设备业务验收范围保持明确。
+
 ## 未发布：Maven/HAR 0.1.5，Swift native-0.1.3
 
 修复现代 Android Picker 启动清理、相机跨实例文件隔离和 maxCount 1..500 合同。保存继续写原字节：Android API28+ 严格拒绝 ImageDecoder partial，API24–27 与 Swift 对 PNG/JPEG/WebP 检查标准结束边界后小尺寸实际解码；HAR 实际解码并释放小 PixelMap。修复可读尺寸但缺少像素的截断输入误入授权/保存。Swift 采用独立不可变 tag/revision `native-0.1.3`，不重用仅提供 HAR 的历史 `0.1.3` tag；此仓库不提供 CocoaPods podspec。候选均未发布，远程消费及设备验收另行记录。
