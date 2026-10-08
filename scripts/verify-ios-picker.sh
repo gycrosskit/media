@@ -12,7 +12,7 @@ xcrun --sdk iphonesimulator swiftc -emit-library -emit-module -enable-testing -m
     iosApp/Sources/GycMedia/*.swift -o "$app/Frameworks/libGycMedia.dylib"
 xcrun --sdk iphonesimulator swiftc -parse-as-library -target "$target" -sdk "$sdk" -I "$output/module" \
     -L "$app/Frameworks" -lGycMedia -Xlinker -rpath -Xlinker @executable_path/Frameworks \
-    iosApp/Tests/PickerLifecycleCheck.swift -o "$app/PickerCheck"
+    iosApp/Tests/*.swift -o "$app/PickerCheck"
 cat > "$app/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

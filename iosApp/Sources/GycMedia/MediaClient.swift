@@ -25,6 +25,7 @@ public final class MediaClient: NSObject {
     private var pickerRequest: PickerRequest?
     private var latestPickerRequestId: UUID?
     private var pickerController: UIViewController?
+    private var imageReadProgress: Progress?
     /// 多次替换只保留最新展示动作，旧 dismiss 完成后再执行。
     private var pendingPresentation: (() -> Void)?
     private var isDismissingPicker = false
@@ -220,6 +221,8 @@ public final class MediaClient: NSObject {
     private func finishPicker(_ completion: @escaping (MediaPickerCallback) -> Void) {
         UIKitExecutionContext.run { [weak self] in
             guard let self, let request = pickerRequest else { return }
+            imageReadProgress?.cancel()
+            imageReadProgress = nil
             let controller = pickerController
             pickerController = nil
             pickerRequest = nil
@@ -430,61 +433,24 @@ extension MediaClient: UIImagePickerControllerDelegate, UINavigationControllerDe
 }
 
 extension MediaClient: PHPickerViewControllerDelegate {
-    /// 并行读取多选图片，但按用户选择顺序组装最终结果。
+    /// Read one provider at a time; a cancelled/replaced request cannot start another file.
     public func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
         guard pickerController === picker, let request = pickerRequest else { return }
-        guard !results.isEmpty else {
-            cancelImagePicker()
-            return
-        }
-        let group = DispatchGroup()
-        let lock = NSLock()
-        let policy = request.compression
-        var loaded = Array<SelectedImage?>(repeating: nil, count: results.count)
-        var originalBytes = 0
-        var outputBytes = 0
-        var exceedsLimit = false
-        for (index, result) in results.enumerated() {
-            let provider = result.itemProvider
-            guard let typeIdentifier = ImageSelectionProcessor.imageTypeIdentifier(for: provider) else { continue }
-            group.enter()
-            provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { data, _ in
-                defer { group.leave() }
-                guard let data else { return }
-                lock.lock()
-                originalBytes += data.count
-                exceedsLimit = exceedsLimit || originalBytes > Self.maxBytes
-                let shouldRead = !exceedsLimit
-                lock.unlock()
-                guard shouldRead else { return }
-                let image: SelectedImage?
-                do {
-                    image = try ImageSelectionProcessor.selectedImage(
-                        data: data, suggestedName: provider.suggestedName,
-                        typeIdentifier: typeIdentifier, policy: policy
-                    )
-                } catch ImageSelectionError.tooLarge {
-                    lock.lock(); exceedsLimit = true; lock.unlock()
-                    return
-                } catch { return }
-                lock.lock()
-                outputBytes += image?.data.count ?? 0
-                exceedsLimit = exceedsLimit || outputBytes > Self.maxBytes
-                if !exceedsLimit { loaded[index] = image }
-                lock.unlock()
+        guard !results.isEmpty else { cancelImagePicker(); return }
+        imageReadProgress?.cancel()
+        imageReadProgress = ImageSelectionProcessor.readImages(
+            results.map(\.itemProvider), policy: request.compression,
+            isActive: { [weak self, weak picker] in
+                guard let self, let picker else { return false }
+                return self.pickerRequest?.id == request.id && self.pickerController === picker
             }
-        }
-        group.notify(queue: .main) { [weak self] in
-            guard let self,
-                  self.pickerRequest?.id == request.id,
-                  self.pickerController === picker else { return }
-            let images = loaded.compactMap { $0 }
-            if exceedsLimit {
-                finishPicker(error: Self.limitExceededMessage)
-            } else if images.isEmpty {
-                finishPicker(error: "无法读取所选图片")
-            } else {
-                completePicker(images)
+        ) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .failure(.tooLarge): self.finishPicker(error: Self.limitExceededMessage)
+            case .success(let images):
+                if images.isEmpty { self.finishPicker(error: "无法读取所选图片") }
+                else { self.completePicker(images) }
             }
         }
     }

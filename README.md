@@ -4,7 +4,7 @@
 
 core 提供选图、拍照、原图/压缩与相册保存；Android/iOS 由宿主接给 CMP 或 Kuikly，media-kuikly 仅提供 OHOS Module。
 
-适用版本：Maven 0.1.7；Swift native-0.1.3 / HAR 0.1.6沿用原字节。本次修复与平台边界见[功能与平台差异](docs/功能与平台差异.md)，构建与渠道验收见[版本发布记录](https://github.com/gycrosskit/media/releases/tag/0.1.7)；下方旧版本记录保留其历史范围。
+适用版本：Maven 0.1.8；Swift native-0.1.4 / HAR 0.1.6沿用原字节。远程验收以固定 Release 结果为准。本次修复与平台边界见[功能与平台差异](docs/功能与平台差异.md)，构建与渠道验收见[版本发布记录](https://github.com/gycrosskit/media/releases/tag/0.1.8)；下方旧版本记录保留其历史范围。
 
 当前测试覆盖、执行时点和未验收项集中见[验证范围](docs/功能与平台差异.md#验证范围)，复现命令见[开发与验证](docs/开发与验证.md)。
 
@@ -140,14 +140,14 @@ Kuikly group 固定从腾讯 Maven 读取 metadata 和实际产物，避免其�
 
 ```kotlin
 commonMain.dependencies {
-    implementation("com.github.gycrosskit.media:media-core:0.1.7")
+    implementation("com.github.gycrosskit.media:media-core:0.1.8")
 }
 ohosArm64Main.dependencies {
-    implementation("com.github.gycrosskit.media:media-kuikly:0.1.7")
+    implementation("com.github.gycrosskit.media:media-kuikly:0.1.8")
 }
 ```
 
-iOS 在 Xcode 的 Package Dependencies 添加 `https://github.com/gycrosskit/media.git`，选择精确 revision/tag `native-0.1.3`，产品 `GycMedia`（真实远程 SDK/Simulator 回归已验；历史版本为 `0.1.2`）。KMP 不自动导入该 Swift Package，桥接步骤见接入指南。
+iOS 在 Xcode 的 Package Dependencies 添加 `https://github.com/gycrosskit/media.git`，选择精确 revision/tag `native-0.1.4`，产品 `GycMedia`（候选远程消费尚待本次发布后验证；历史版本为 `0.1.2`）。KMP 不自动导入该 Swift Package，桥接步骤见接入指南。
 
 HarmonyOS 原生包独立安装，当前保留 HAR `0.1.6`。精确 Registry 安装与固定 [0.1.6 Release HAR](https://github.com/gycrosskit/media/releases/tag/0.1.6) 消费分别验收，实际状态见顶部版本发布记录：
 
@@ -204,8 +204,10 @@ iOS/HarmonyOS 按系统图像解码能力识别格式。不提供视频、上传
 
 ## 自动回归
 
-[Component regression](.github/workflows/regression.yml) 在 PR 和 `main` 更新时运行现有 Python/Node 契约测试、Android 单元测试及编译，以及 macOS 上的 iOS/OHOS KLIB 编译；已有 iOS、JVM、Kuikly 独立测试也按该 workflow 执行。Release 发布或手动指定不可变版本后，校验 Release Maven 归档的 SHA-256、POM、metadata 与文件引用，并从 JitPack 独立编译 Android 消费者、链接 iOS 消费者、编译 OHOS Kuikly 消费者。此流程不发布二进制。
+[Component regression](.github/workflows/regression.yml) 的当前工作树候选按事件分阶段：PR 先判断变更范围，仅源码变更运行已有 Android/Native 测试与编译；纯文档 PR 和 `main` push 只运行轻量脚本/配置检查。手动运行不填版本时执行源码回归，未知路径保守按源码处理。候选尚未合入，线上生效与耗时以实际 Actions 运行为准。
+
+Maven Release 发布或手动填写精确已发布版本时，`verify-public` 统一校验一次冻结归档、精确 tag/commit、完整 publication 清单和公开文件；通过后 Android/Native 独立消费者从 JitPack 解析该版本。PR 不再反复消费旧基线；不使用 `mavenLocal`、本库源码或归档替换远程依赖。此流程不发布二进制。
 
 OHOS KLIB 编译不代表 HAR 构建、ohpm 上架或真机验收。当前没有已确认可用的 DevEco/Hvigor runner，这些检查尚未自动化，不能作为 CI 通过范围。
 
-PR 的发布回归固定验证已发布 `0.1.5` 基线，五个 job 都通过后才合并；Release 事件使用其精确标签。基线证明远程产物可消费，不代表 PR 新源码已发布。
+阶段、缓存、有限网络重试、失败记录与证据边界见[共用 CI 规则](https://github.com/gycrosskit/.github/blob/main/docs/持续集成门禁.md)；本库实际平台命令以 workflow 为准。源码通过、远程消费、HAR/ohpm 与设备验收分别记录。

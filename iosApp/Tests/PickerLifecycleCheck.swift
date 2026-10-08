@@ -253,6 +253,7 @@ private func runChecks(window: UIWindow) async {
     precondition(hiddenPage.failed == 1, "A hidden presenter must fail without retrying")
     root.view.isHidden = false
     MediaClient.shared.presenterResolver = nil
+    await checkImageLoading()
     print("PASS: Picker ownership, cancellation, UIKit transitions and presenter containers")
 }
 
