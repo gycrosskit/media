@@ -24,9 +24,9 @@ Maven 预发行 `0.1.4` 已发布，修复 Android/iOS Picker 的线程、取消
 | Swift Package GycMedia | 0.1.2 | 已验证历史版本；当前 Swift revision 见下节 |
 | HarmonyOS HAR | 0.1.3 | 保留已验证 Release HAR；Registry 可安装状态独立核对 |
 
-历史 0.1.3 标签只提供 HAR；当时 Maven 为 0.1.2，随后预发行 0.1.4。当前版本与状态见下节。
+历史 0.1.3 标签只提供 HAR；当时 Maven 为 0.1.2，随后预发行 0.1.4。当前版本与状态见本页前部。
 
-## 0.1.5 发布状态
+## 0.1.5 历史发布状态
 
 Maven core/Kuikly `0.1.5` 已提供 GitHub 预发行，JitPack 的精确标签/提交、完整 publication 和实际文件校验通过。Release HAR 已重下载校验；OHPM 以独立 `candidate-0.1.5` 标签提交审核，精确 Registry 安装仍返回 NOTFOUND，旧 next 保持。全新远程 Maven 的 Android/iOS/OHOS 消费与 Simulator Framework 链接已通过。详情见[0.1.5 发布验收](docs/0.1.5发布验收.md)。 Swift Package 独立 revision `native-0.1.3` 已发布，真实远程解析、iOS14 arm64 device/Simulator SDK 编译与 UIKit 回归通过；KmpMediaBridge 组合真实远程 MediaCore Framework 的 Swift typecheck 已通过。
 
@@ -149,10 +149,10 @@ ohosArm64Main.dependencies {
 
 iOS 在 Xcode 的 Package Dependencies 添加 `https://github.com/gycrosskit/media.git`，选择精确 revision/tag `native-0.1.3`，产品 `GycMedia`（真实远程 SDK/Simulator 回归已验；历史版本为 `0.1.2`）。KMP 不自动导入该 Swift Package，桥接步骤见接入指南。
 
-HarmonyOS 原生包独立安装；本轮 Maven/HAR `0.1.5` 已提供 GitHub 预发行，Release HAR 独立消费已通过。以下 Registry 命令在本轮核验时仍返回 NOTFOUND；审核期间从 [0.1.5 Release](https://github.com/gycrosskit/media/releases/tag/0.1.5) 下载并校验 HAR 后本地安装：
+HarmonyOS 原生包独立安装，当前保留 HAR `0.1.6`。精确 Registry 安装与固定 [0.1.6 Release HAR](https://github.com/gycrosskit/media/releases/tag/0.1.6) 消费分别验收，实际状态见顶部版本发布记录：
 
 ```sh
-ohpm install @gycrosskit/media@0.1.5
+ohpm install @gycrosskit/media@0.1.6
 ```
 
 ## 最小使用
