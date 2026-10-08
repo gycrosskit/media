@@ -42,6 +42,10 @@ else:
         sys.exit(6)
     if case in ['tls', 'http']:
         sys.exit(35 if case == 'tls' else 22)
+    if case in ['timeout_recovered', 'connect_recovered', 'timeout_exhausted']:
+        attempts = len(Path(os.environ['MOCK_CALLS']).read_text().splitlines())
+        if case == 'timeout_exhausted' or attempts < 3:
+            sys.exit(7 if case == 'connect_recovered' else 28)
     print('200 ' + ('127.0.0.1' if case == 'private' else '61.177.127.227'), end='')
 ''')
     (root / 'sudo').write_text('''#!/usr/bin/env python3
@@ -59,6 +63,7 @@ Path(os.environ['MOCK_HOSTS']).write_text(sys.stdin.read())
                        GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='github-hosted', RUNNER_OS='Linux',
                        MOCK_HOSTS=str(root / 'hosts'), MOCK_CALLS=str(root / 'calls'))
     cases = ['outside_ci', 'self_hosted', 'normal', 'write_failure', 'private', 'tls', 'http',
+             'timeout_recovered', 'connect_recovered', 'timeout_exhausted',
              'doh_bad_status', 'doh_wrong_question', 'doh_wrong_owner', 'doh_private', 'doh_tls', 'doh_mismatch', 'doh_valid']
     for case in cases:
         answer = json.loads(json.dumps(ANSWER))
@@ -77,7 +82,7 @@ Path(os.environ['MOCK_HOSTS']).write_text(sys.stdin.read())
             (root / name).unlink(missing_ok=True)
         result = subprocess.run(['bash', str(SCRIPT)], env=environment, capture_output=True, text=True)
         assert result.returncode == 0, (case, result.stderr)
-        pinned = case in ['normal', 'doh_valid']
+        pinned = case in ['normal', 'doh_valid', 'timeout_recovered', 'connect_recovered']
         assert (root / 'hosts').exists() == pinned, case
         assert ('job host address reused' in result.stdout) == pinned, case
         if pinned:
@@ -86,4 +91,8 @@ Path(os.environ['MOCK_HOSTS']).write_text(sys.stdin.read())
         assert ('cloudflare-dns.com' in calls) == case.startswith('doh_'), case
         if case in ['outside_ci', 'self_hosted']:
             assert not calls, case
+        if case in ['timeout_recovered', 'connect_recovered', 'timeout_exhausted']:
+            assert len(calls.splitlines()) == 3, case
+        if case in ['tls', 'http']:
+            assert len(calls.splitlines()) == 1, case
     print(f'fork host trust boundaries: {len(cases)} cases passed (all hosts writes mocked)')

@@ -21,8 +21,8 @@ for ci_attempt in 1 2 3; do
         ci_probe_error=$?
     fi
     echo "CI fork HTTPS address probe failed (attempt $ci_attempt/3, curl exit $ci_probe_error)"
-    # 仅系统 DNS 故障重试/备用解析；HTTP、TLS 或产物错误不能用 DoH 绕开。
-    if [[ "$ci_probe_error" != 6 ]]; then break; fi
+    # 瞬时连接失败也有限重试；备用 DNS 仍仅处理解析失败，不绕过 HTTP/TLS。
+    if [[ "$ci_probe_error" != 6 && "$ci_probe_error" != 7 && "$ci_probe_error" != 28 ]]; then break; fi
     if [[ "$ci_attempt" != 3 ]]; then sleep 2; fi
 done
 if [[ "$ci_probe_error" == 6 ]]; then
