@@ -11,7 +11,13 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
-      - run: python3 network-probe.py
+      - name: Verify configured recovery and Native download route
+        env:
+          CI_FORK_HOST_FALLBACK_IP: ${{ vars.CI_FORK_HOST_FALLBACK_IP }}
+        run: |
+          mkdir -p network-proof
+          bash scripts/ci-pin-fork-host.sh
+          curl --disable --fail --silent --show-error --proto '=https' --ipv4 --noproxy maven.eazytec-cloud.com --connect-timeout 10 --max-time 20 --head --output network-proof/llvm.headers --write-out 'LLVM HEAD status=%{http_code} remote=%{remote_ip} connect=%{time_connect} tls=%{time_appconnect}\n' https://maven.eazytec-cloud.com/nexus/repository/file-storage/llvm/cpf-llvm-19-aarch64-macos-dev-20.tar.gz
         timeout-minutes: 4
       - if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
