@@ -140,10 +140,10 @@ Kuikly group 固定从腾讯 Maven 读取 metadata 和实际产物，避免其�
 
 ```kotlin
 commonMain.dependencies {
-    implementation("com.github.gycrosskit.media:media-core:0.1.5")
+    implementation("com.github.gycrosskit.media:media-core:0.1.7")
 }
 ohosArm64Main.dependencies {
-    implementation("com.github.gycrosskit.media:media-kuikly:0.1.5")
+    implementation("com.github.gycrosskit.media:media-kuikly:0.1.7")
 }
 ```
 
@@ -200,7 +200,7 @@ iOS/HarmonyOS 按系统图像解码能力识别格式。不提供视频、上传
 
 组件源码使用 Apache-2.0，见 [LICENSE](LICENSE)。Kuikly 和平台 SDK 遵循各自许可。
 
-本轮制品校验与远程状态见 [0.1.5 发布验收](docs/0.1.5发布验收.md)；历史记录见 [0.1.4 发布验收](docs/0.1.4远程发布验收.md)及 [0.1.3 HAR 发布验收](docs/发布验收-0.1.3.md)。
+历史 0.1.5 制品校验与远程状态见 [0.1.5 发布验收](docs/0.1.5发布验收.md)；历史记录见 [0.1.4 发布验收](docs/0.1.4远程发布验收.md)及 [0.1.3 HAR 发布验收](docs/发布验收-0.1.3.md)。
 
 ## 自动回归
 
