@@ -4,8 +4,12 @@ import argparse
 import concurrent.futures
 import hashlib
 import io
+import http.client
 import json
 import re
+import ssl
+import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -29,8 +33,78 @@ def require(condition, detail):
 def get_bytes(url):
     # 仅访问公开端点，不读取 Token、Cookie 或本机 Maven 配置。
     request = urllib.request.Request(url, headers={'User-Agent': 'GYCrossKit-public-maven-check'})
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return response.read()
+    for attempt in range(3):
+        try:
+            deadline = time.monotonic() + 90
+            with urllib.request.urlopen(request, timeout=15) as response:
+                chunks = []
+                expected = response.headers.get('Content-Length')
+                length = 0
+                while True:
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError('Public download exceeded 90 seconds: ' + url)
+                    chunk = response.read1(65536)
+                    if not chunk:
+                        if expected and expected.isdigit() and length != int(expected):
+                            raise http.client.IncompleteRead(b'', int(expected) - length)
+                        return b''.join(chunks)
+                    chunks.append(chunk)
+                    length += len(chunk)
+        except urllib.error.HTTPError as error:
+            print(json.dumps({'url': url, 'attempt': attempt + 1, 'http_status': error.code}), file=sys.stderr)
+            if error.code not in (408, 429, 500, 502, 503, 504) or attempt == 2:
+                raise
+        except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.IncompleteRead, ssl.SSLEOFError) as error:
+            print(json.dumps({'url': url, 'attempt': attempt + 1, 'type': type(error).__name__, 'error': str(error)}), file=sys.stderr)
+            if isinstance(getattr(error, 'reason', None), ssl.SSLCertVerificationError) or attempt == 2:
+                raise
+        time.sleep(attempt + 1)
+
+
+def ready_state(url, version, commit, publications, output, fetch, wait_seconds=0, poll_seconds=10, bootstrap_url=None):
+    deadline = time.monotonic() + wait_seconds
+    attempt = 0
+    triggered = False
+    while True:
+        attempt += 1
+        try:
+            raw = fetch(url)
+        except Exception as error:
+            (output / 'jitpack-state-error.json').write_text(json.dumps({
+                'attempt': attempt, 'type': type(error).__name__, 'error': str(error)}, indent=2) + '\n')
+            raise
+        # 先持久化原响应，再解码与校验，首失败不能丢失。
+        (output / ('jitpack-state-%03d.json' % attempt)).write_bytes(raw)
+        state = json.loads(raw)
+        (output / 'jitpack-state.json').write_bytes(raw)
+        with (output / 'jitpack-state-history.jsonl').open('a') as history:
+            history.write(json.dumps({'attempt': attempt, 'status': state.get('status'),
+                                      'elapsed_remaining': max(0, round(deadline - time.monotonic(), 3))}) + '\n')
+        # 只等待明确未就绪状态；身份/清单/摘要不匹配和真正构建失败立即失败。
+        if str(state.get('status', '')).lower() not in ('none', 'building', 'queued'):
+            validate_state(state, version, commit, publications)
+            return state
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            validate_state(state, version, commit, publications)
+        if str(state.get('status', '')).lower() == 'none' and bootstrap_url and not triggered:
+            # 只查询 API 不会发起新构建；请求精确 publication POM 一次，不删除/重建已有标签。
+            triggered = True
+            try:
+                result = {'url': bootstrap_url, 'received_bytes': len(fetch(bootstrap_url))}
+            except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.IncompleteRead) as error:
+                result = {'url': bootstrap_url, 'type': type(error).__name__, 'error': str(error)}
+                if isinstance(error, urllib.error.HTTPError) and error.code not in (404, 408, 429, 500, 502, 503, 504):
+                    (output / 'jitpack-trigger.json').write_text(json.dumps(result, indent=2) + '\n')
+                    raise
+                if isinstance(getattr(error, 'reason', None), ssl.SSLCertVerificationError):
+                    (output / 'jitpack-trigger.json').write_text(json.dumps(result, indent=2) + '\n')
+                    raise
+            (output / 'jitpack-trigger.json').write_text(json.dumps(result, indent=2) + '\n')
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            validate_state(state, version, commit, publications)
+        time.sleep(min(poll_seconds, remaining))
 
 
 def validate_state(state, version, commit, publications):
@@ -81,7 +155,8 @@ def check_sidecars(url, data, fetch):
     return result
 
 
-def audit(repository, version, commit, publications, output, group=None, license_name='Apache-2.0', fetch=get_bytes):
+def audit(repository, version, commit, publications, output, group=None, license_name='Apache-2.0', fetch=get_bytes,
+          wait_seconds=0, poll_seconds=10):
     require(re.fullmatch(NAME, repository) and re.fullmatch(NAME, version), 'Invalid repository/version')
     require(re.fullmatch(r'[0-9a-f]{40}', commit), 'Expected a full lowercase commit SHA')
     require(publications and len(publications) == len(set(publications)) and
@@ -91,12 +166,12 @@ def audit(repository, version, commit, publications, output, group=None, license
     require(license_name in LICENSES, 'Unsupported expected license')
     base = 'https://jitpack.io/' + group.replace('.', '/') + '/'
     state_url = f'https://jitpack.io/api/builds/com.github.gycrosskit/{repository}/{version}'
-    state = json.loads(fetch(state_url))
-    validate_state(state, version, commit, publications)
     output = Path(output)
     require(not output.exists() or (output.is_dir() and not any(output.iterdir())), 'Output directory must be new or empty')
     output.mkdir(parents=True, exist_ok=True)
-    (output / 'jitpack-state.json').write_text(json.dumps(state, indent=2) + '\n')
+    first = publications[0]
+    ready_state(state_url, version, commit, publications, output, fetch, wait_seconds, poll_seconds,
+                bootstrap_url=f'{base}{first}/{version}/{first}-{version}.pom')
     publication_set = set(publications)
     expected_license, expected_license_url = LICENSES[license_name]
     ns = {'m': 'http://maven.apache.org/POM/4.0.0'}
@@ -191,8 +266,20 @@ def main():
     parser.add_argument('--expected-publications', required=True, help='精确 publication CSV，不使用本机 staging 推断公网 inventory')
     parser.add_argument('--output-dir', type=Path, required=True, help='新的空目录，全部要求通过后才生成 proof.json')
     parser.add_argument('--license', choices=tuple(LICENSES), default='Apache-2.0')
+    parser.add_argument('--wait-seconds', type=int, default=300, help='只等待明确未就绪状态，最多300秒；0立即校验')
     args = parser.parse_args()
-    proof = audit(args.repo, args.version, args.commit, args.expected_publications.split(','), args.output_dir, args.group, args.license)
+    if not 0 <= args.wait_seconds <= 300:
+        parser.error('--wait-seconds must be between 0 and 300')
+    fresh_output = not args.output_dir.exists() or (args.output_dir.is_dir() and not any(args.output_dir.iterdir()))
+    try:
+        proof = audit(args.repo, args.version, args.commit, args.expected_publications.split(','), args.output_dir,
+                      args.group, args.license, wait_seconds=args.wait_seconds)
+    except Exception as error:
+        # 不覆盖已有输出目录；错误收据不是通过证明。
+        if fresh_output and args.output_dir.is_dir() and not (args.output_dir / 'proof.json').exists():
+            (args.output_dir / 'error.json').write_text(json.dumps({
+                'type': type(error).__name__, 'error': str(error), 'verified': False}, indent=2) + '\n')
+        raise
     missing = sum(len(item['algorithms']) for item in proof['missingPublicHigherSidecars'])
     print(f"{args.repo} {args.version}: {proof['moduleCount']} publications, {proof['uniqueFileCount']} unique variant files verified; "
           f"public POM/module/variant MD5/SHA1 verified; SHA256/SHA512 HTTP404 missing (not verified): {missing}")

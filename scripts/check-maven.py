@@ -24,11 +24,23 @@ expected_modules = set(args.modules_csv.split(','))
 expected_targets = set(filter(None, args.native_targets_csv.split(',')))
 
 
+# 缓存摘要而非二进制；不同 variant 的声明仍分别核对。
+file_digests = {}
+
+
+def digests(path):
+    if path not in file_digests:
+        content = path.read_bytes()
+        file_digests[path] = {algorithm: hashlib.new(algorithm, content).hexdigest()
+                              for algorithm in ('md5', 'sha1', 'sha256', 'sha512')}
+    return file_digests[path]
+
+
 def check_sidecars(path):
     for algorithm in ('md5', 'sha1', 'sha256', 'sha512'):
         checksum = path.with_name(path.name + '.' + algorithm)
         assert checksum.is_file(), f'Missing checksum: {checksum}'
-        assert checksum.read_text().strip() == hashlib.new(algorithm, path.read_bytes()).hexdigest(), checksum
+        assert checksum.read_text().strip() == digests(path)[algorithm], checksum
 
 
 def resolve_artifact(path):
@@ -100,7 +112,7 @@ for module in modules:
             check_sidecars(artifact)
             assert artifact.stat().st_size == entry["size"], artifact
             for algorithm in ("md5", "sha1", "sha256", "sha512"):
-                assert hashlib.new(algorithm, artifact.read_bytes()).hexdigest() == entry[algorithm], artifact
+                assert digests(artifact)[algorithm] == entry[algorithm], artifact
 
 for module in modules:
     for variant in json.loads(module.read_text())["variants"]:

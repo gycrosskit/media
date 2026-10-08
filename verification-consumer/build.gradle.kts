@@ -2,7 +2,7 @@ plugins {
     kotlin("multiplatform") version "2.2.21-1.0.0"
     id("com.android.library") version "8.10.1"
 }
-val mediaVersion = providers.gradleProperty("mediaVersion").orElse("0.1.7").get()
+val mediaVersion = providers.gradleProperty("mediaVersion").orElse("0.1.8").get()
 kotlin {
     androidTarget()
     iosArm64()

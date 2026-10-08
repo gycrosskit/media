@@ -69,12 +69,13 @@ class AndroidImageSavePlatform(
             resolver.openOutputStream(uri)?.use { output -> output.write(request.bytes) }
                 ?: return ImageSaveResult.FAILED
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                resolver.update(
+                val published = resolver.update(
                     uri,
                     ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) },
                     null,
                     null,
                 )
+                if (published != 1) return ImageSaveResult.FAILED
             }
             saved = true
             ImageSaveResult.SAVED

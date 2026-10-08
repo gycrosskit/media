@@ -56,6 +56,74 @@ enum ImageSelectionProcessor {
         )
     }
 
+    /// Main owns the sequence; provider temporary files are read before its callback returns.
+    /// One file is in flight, and cancellation/owner replacement prevents starting a successor.
+    static func readImages(
+        _ providers: [NSItemProvider], policy: ImageSelectionPolicy?,
+        isActive: @escaping () -> Bool,
+        completion: @escaping (Result<[SelectedImage], ImageSelectionError>) -> Void
+    ) -> Progress {
+        precondition(Thread.isMainThread)
+        let progress = Progress(totalUnitCount: Int64(providers.count))
+        var images: [SelectedImage] = []
+        var originalBytes = 0
+        var outputBytes = 0
+        func loadNext(_ index: Int) {
+            guard !progress.isCancelled, isActive() else { return }
+            guard index < providers.count else {
+                // Completion can reenter the picker; never run it before its Progress is returned.
+                DispatchQueue.main.async {
+                    if !progress.isCancelled && isActive() { completion(.success(images)) }
+                }
+                return
+            }
+            let provider = providers[index]
+            guard let type = imageTypeIdentifier(for: provider) else { loadNext(index + 1); return }
+            let remaining = MediaClient.maxBytes - originalBytes
+            let child = provider.loadFileRepresentation(forTypeIdentifier: type) { url, _ in
+                guard !progress.isCancelled else { return }
+                let active = Thread.isMainThread ? isActive() : DispatchQueue.main.sync(execute: isActive)
+                guard active else { return }
+                var selected: SelectedImage?
+                var readBytes = 0
+                var tooLarge = false
+                do {
+                    if let url {
+                        if let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > remaining {
+                            throw ImageSelectionError.tooLarge
+                        }
+                        let file = try FileHandle(forReadingFrom: url)
+                        defer { try? file.close() }
+                        var data = Data()
+                        // A changed/unknown file length must still stop at one byte beyond the budget.
+                        while let chunk = try file.read(upToCount: min(64 * 1024, remaining + 1 - data.count)), !chunk.isEmpty {
+                            guard !progress.isCancelled else { return }
+                            data.append(chunk)
+                            if data.count > remaining { throw ImageSelectionError.tooLarge }
+                        }
+                        readBytes = data.count
+                        selected = try selectedImage(data: data, suggestedName: provider.suggestedName,
+                                                     typeIdentifier: type, policy: policy)
+                    }
+                } catch ImageSelectionError.tooLarge { tooLarge = true }
+                  catch { /* An unreadable provider does not discard other selected images. */ }
+                DispatchQueue.main.async {
+                    guard !progress.isCancelled, isActive() else { return }
+                    originalBytes += readBytes
+                    outputBytes += selected?.data.count ?? 0
+                    guard !tooLarge, outputBytes <= MediaClient.maxBytes else {
+                        completion(.failure(.tooLarge)); return
+                    }
+                    if let selected { images.append(selected) }
+                    loadNext(index + 1)
+                }
+            }
+            progress.addChild(child, withPendingUnitCount: 1)
+        }
+        loadNext(0)
+        return progress
+    }
+
     static func compress(image: UIImage, policy: ImageSelectionPolicy) -> Data? {
         let size = CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
         let longest = max(size.width, size.height)
@@ -80,8 +148,7 @@ enum ImageSelectionProcessor {
     }
 
     static func jpegFileName(_ suggestedName: String?) -> String {
-        let name = (suggestedName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let component = (name as NSString).lastPathComponent
+        let component = fileName(suggestedName, fallbackExtension: "jpg")
         let stem = (component as NSString).deletingPathExtension.trimmingCharacters(in: .whitespacesAndNewlines)
         let safeStem = stem.isEmpty || stem == "." || stem == ".."
             ? "ios_\(UUID().uuidString.lowercased())"
@@ -90,8 +157,9 @@ enum ImageSelectionProcessor {
     }
 
     static func fileName(_ suggestedName: String?, fallbackExtension: String) -> String {
-        let value = suggestedName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !value.isEmpty {
+        let name = suggestedName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let value = (name as NSString).lastPathComponent.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !value.isEmpty && value != "." && value != ".." && value != "/" {
             return (value as NSString).pathExtension.isEmpty
                 ? "\(value).\(fallbackExtension)"
                 : value
