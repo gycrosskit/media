@@ -31,7 +31,8 @@ def request(label, url, extra=()):
 
 request('system-marker', URL)
 for label, url in [('cloudflare', f'https://cloudflare-dns.com/dns-query?name={HOST}&type=A'),
-                   ('google', f'https://dns.google/resolve?name={HOST}&type=A')]:
+                   ('google', f'https://dns.google/resolve?name={HOST}&type=A'),
+                   ('alidns', f'https://dns.alidns.com/resolve?name={HOST}&type=A')]:
     if request(label, url, ('--header', 'Accept: application/dns-json')) == 0:
         try:
             response = json.loads((OUT / (label + '.body')).read_text())
@@ -40,6 +41,8 @@ for label, url in [('cloudflare', f'https://cloudflare-dns.com/dns-query?name={H
             addresses.update(records)
         except (ValueError, KeyError) as error:
             print(label, 'parse error:', repr(error), flush=True)
+# 仅诊断此前真实 HTTPS 成功日志中的地址；生产恢复不直接采用历史地址。
+addresses.update(['61.177.127.227', '36.153.109.99'])
 for address in sorted(addresses):
     parsed = ipaddress.IPv4Address(address)
     if parsed.is_global and not parsed.is_multicast:
