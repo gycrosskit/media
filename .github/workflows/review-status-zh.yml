@@ -1,0 +1,13 @@
+name: 评审状态说明
+
+on:
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  translate:
+    # 部署前替换为包含共用 workflow 的完整 commit SHA；不能使用 main 或 tag。
+    uses: gycrosskit/.github/.github/workflows/review-status-zh.yml@6f74829d36f2a9023440b43fa5f1154abe4be88f
