@@ -10,4 +10,4 @@ permissions:
 jobs:
   translate:
     # 部署前替换为包含共用 workflow 的完整 commit SHA；不能使用 main 或 tag。
-    uses: gycrosskit/.github/.github/workflows/review-status-zh.yml@6f74829d36f2a9023440b43fa5f1154abe4be88f
+    uses: gycrosskit/.github/.github/workflows/review-status-zh.yml@8312fb7a1eabf40b857470aee33f9be3463b87a8
