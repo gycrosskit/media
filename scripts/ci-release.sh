@@ -23,5 +23,10 @@ EXTRACT
 python3 scripts/check-maven.py "$staging/maven" com.github.gycrosskit.media "$VERSION" media-core,media-kuikly ios_arm64,ios_x64,ios_simulator_arm64,ohos_arm64
 # 标签必须解析为不可变发布提交；不把当前 PR 的 SHA 当成已发布版本。
 commit="$(git ls-remote https://github.com/gycrosskit/media.git "refs/tags/$VERSION" "refs/tags/$VERSION^{}" | awk '$2 ~ /\^\{\}$/ {peeled=$1} $2 !~ /\^\{\}$/ {direct=$1} END {print peeled ? peeled : direct}')"
+publications=media-core,media-core-android,media-core-iosarm64,media-core-iosx64,media-core-iossimulatorarm64,media-core-ohosarm64,media-kuikly,media-kuikly-ohosarm64
+case "$VERSION" in
+  0.1.[0-8]) ;;
+  *) publications=media-core,media-core-android,media-core-iosarm64,media-core-iosx64,media-core-iossimulatorarm64,media-core-ohosarm64,media-kuikly,media-kuikly-android,media-kuikly-iosarm64,media-kuikly-iosx64,media-kuikly-iossimulatorarm64,media-kuikly-ohosarm64 ;;
+esac
 python3 scripts/check-public-maven.py --repo media --version "$VERSION" --commit "$commit" \
-  --expected-publications media-core,media-core-android,media-core-iosarm64,media-core-iosx64,media-core-iossimulatorarm64,media-core-ohosarm64,media-kuikly,media-kuikly-ohosarm64 --output-dir "${CI_DIAGNOSTICS_DIR:-ci-diagnostics}/public"
+  --expected-publications "$publications" --output-dir "${CI_DIAGNOSTICS_DIR:-ci-diagnostics}/public"

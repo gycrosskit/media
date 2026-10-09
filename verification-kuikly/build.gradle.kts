@@ -7,5 +7,6 @@ sourceSets.test {
 }
 dependencies {
     testImplementation(kotlin("test-junit"))
+    testImplementation("org.json:json:20231013")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2-1.0.0")
 }
