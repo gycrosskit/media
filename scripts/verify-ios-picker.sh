@@ -29,4 +29,4 @@ PLIST
 codesign --force --sign - "$app/Frameworks/libGycMedia.dylib" "$app" >/dev/null
 xcrun simctl install "${MEDIA_SIMULATOR:-booted}" "$app"
 xcrun simctl launch --console --terminate-running-process "${MEDIA_SIMULATOR:-booted}" io.github.gycrosskit.media.picker-check | tee "$output/result.log"
-rg -q '^PASS: Picker ownership' "$output/result.log"
+grep -q '^PASS: Picker ownership' "$output/result.log"
