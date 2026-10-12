@@ -104,6 +104,8 @@ jobs:
       - name: Check source cache and test execution policy
         if: needs.changes.outputs.source == 'true'
         run: python3 verification/ci/test_cache_contract.py
+      - name: Check Picker harness failure diagnostics
+        run: python3 verification/ci/test_ios_picker_harness.py
       - name: Save public CI diagnostics
         if: always()
         uses: gycrosskit/.github/actions/ci-diagnostics@607ff44db144c68fc6523de38c04aac29e427b68

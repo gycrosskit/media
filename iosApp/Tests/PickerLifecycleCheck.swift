@@ -111,6 +111,7 @@ private func runChecks(window: UIWindow) async {
     } catch ImageSelectionError.tooLarge {} catch { fatalError("Unexpected selection error: \(error)") }
     print("PASS: JPEG output limit classification and valid PNG companion processor")
     print("PASS: Save content boundary PNG/JPEG, preserved trailing bytes and production invalid callback")
+    print("PHASE: UIKit transitions")
     let unused = Controller()
     var completed = 0
     UIKitPresentationContext.dismiss(unused, animated: true) { completed += 1 }
@@ -125,6 +126,7 @@ private func runChecks(window: UIWindow) async {
     var root = Presenter()
     window.rootViewController = root
     window.makeKeyAndVisible()
+    await eventually("Initial Presenter is not visible") { root.appeared }
     let appearing = Controller()
     root.present(appearing, animated: true)
     precondition(appearing.isBeingPresented && appearing.transitionCoordinator != nil)
@@ -159,6 +161,7 @@ private func runChecks(window: UIWindow) async {
         UIKitPresentationContext.dismiss(tabs, animated: false) { continuation.resume() }
     }
 
+    print("PHASE: Picker ownership")
     let custom = Presenter()
     let hidden = UIViewController()
     let active = UIViewController()
@@ -253,6 +256,7 @@ private func runChecks(window: UIWindow) async {
     precondition(hiddenPage.failed == 1, "A hidden presenter must fail without retrying")
     root.view.isHidden = false
     MediaClient.shared.presenterResolver = nil
+    print("PHASE: Image loading")
     await checkImageLoading()
     print("PASS: Picker ownership, cancellation, UIKit transitions and presenter containers")
 }
@@ -261,6 +265,8 @@ private func runChecks(window: UIWindow) async {
 private final class CheckApp: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
     func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        setbuf(stdout, nil)
+        print("START: Picker checks")
         let window = UIWindow(frame: UIScreen.main.bounds)
         self.window = window
         Task { @MainActor in
