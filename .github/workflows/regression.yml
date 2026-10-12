@@ -182,7 +182,7 @@ jobs:
           java-version: '17'
       - name: Restore source Gradle cache
         uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
-        if: (needs.changes.outputs.source == 'true') || (github.event_name == 'workflow_dispatch' && inputs.warm_native_cache && github.ref == 'refs/heads/main')
+        if: needs.changes.outputs.source == 'true'
         with:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
       - run: bash scripts/ci-pin-fork-host.sh

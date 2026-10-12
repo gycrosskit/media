@@ -12,6 +12,8 @@ for name in ('android', 'native'):
     assert "GYC_CI_BUILD_CACHE: 'true'" in job
     assert 'gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a' in job
     assert "cache-read-only: ${{ github.event_name == 'pull_request' }}" in job
+    cache_step = re.search(r'uses: gradle/actions/setup-gradle@[^\n]+\n        if: ([^\n]+)', job)
+    assert cache_step and cache_step.group(1) == "needs.changes.outputs.source == 'true'"
     assert 'cache: gradle' not in job, 'Do not restore Gradle User Home twice'
     assert '--init-script "$PWD/scripts/ci-repositories.gradle"' in job
 for name, job in jobs.items():
