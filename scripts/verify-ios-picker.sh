@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+collect_picker_failure() {
+    local picker_exit=$?
+    if [[ "$picker_exit" == 0 ]]; then return; fi
+    set +e
+    mkdir -p ci-diagnostics
+    shopt -s nullglob
+    for report in "$HOME"/Library/Logs/DiagnosticReports/PickerCheck-*.ips "$HOME"/Library/Logs/DiagnosticReports/PickerCheck-*.crash; do
+        cp "$report" "ci-diagnostics/$(basename "$report").txt"
+    done
+    xcrun simctl spawn "${MEDIA_SIMULATOR:-booted}" log show --last 5m --style compact --predicate 'process == "PickerCheck"' > ci-diagnostics/picker-simulator.txt 2>&1
+    return "$picker_exit"
+}
+trap collect_picker_failure EXIT
 sdk="$(xcrun --sdk iphonesimulator --show-sdk-path)"
 target="$(uname -m)-apple-ios14.0-simulator"
 output="$PWD/build/ios-picker-check"
@@ -28,5 +41,12 @@ cat > "$app/Info.plist" <<'PLIST'
 PLIST
 codesign --force --sign - "$app/Frameworks/libGycMedia.dylib" "$app" >/dev/null
 xcrun simctl install "${MEDIA_SIMULATOR:-booted}" "$app"
-xcrun simctl launch --console --terminate-running-process "${MEDIA_SIMULATOR:-booted}" io.github.gycrosskit.media.picker-check | tee "$output/result.log"
-grep -q '^PASS: Picker ownership' "$output/result.log"
+xcrun simctl launch --console --terminate-running-process "${MEDIA_SIMULATOR:-booted}" io.github.gycrosskit.media.picker-check 2>&1 | tee "$output/result.log" || {
+    picker_failure=("$?" "${PIPESTATUS[@]}")
+    printf 'FAIL: Picker launch=%s tee=%s\n' "${picker_failure[1]}" "${picker_failure[2]}" >&2
+    exit "${picker_failure[0]}"
+}
+grep -q '^PASS: Picker ownership' "$output/result.log" || {
+    printf 'FAIL: Picker PASS marker missing\n' >&2
+    exit 1
+}
