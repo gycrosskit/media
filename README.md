@@ -5,7 +5,7 @@
 
 ## 当前功能与平台边界
 
-core 提供选图、拍照、原图/压缩与相册保存；CMP 注入原生能力，media-kuikly提供三端调用侧与 Android/iOS receiver。
+core 提供选图、拍照、原图/压缩与相册保存；原生宿主注入能力，media-kuikly 提供三端调用侧与 Android/iOS receiver。
 
 历史发布基线：Maven 0.1.8；Swift native-0.1.4；HAR 0.1.6沿用原字节。远程验收以固定 Release 结果为准。本次修复与平台边界见[功能与平台差异](docs/功能与平台差异.md)，构建与渠道验收见[版本发布记录](https://github.com/gycrosskit/media/releases/tag/0.1.8)；下方旧版本记录保留其历史范围。
 
