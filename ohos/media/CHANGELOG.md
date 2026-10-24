@@ -1,5 +1,10 @@
 # 更新日志
 
+## 1.0.0（未发布）
+
+- Maven、iOS Pod 与 OHPM 统一版本为 1.0.0；同仓模块使用同版，Kuikly 配套保持 2.29.1。
+- 本地源码/产物消费与设备、远程发布验收分别记录；不覆盖旧标签或修改历史发布字节。
+
 ## 0.1.6（待发布候选）
 
 选图原始/输出总量维持 32 MiB，超限返回 too_large，配套 Maven 映射为 Failed(limitExceededMessage)；取消、权限和保存 INVALID_CONTENT 协议保持。
