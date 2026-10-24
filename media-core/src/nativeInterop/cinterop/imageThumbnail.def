@@ -1,0 +1,8 @@
+headers = multimedia/image_framework/image/image_source_native.h multimedia/image_framework/image/image_packer_native.h multimedia/image_framework/image/pixelmap_native.h
+headerFilter = multimedia/image_framework/image/image_common.h multimedia/image_framework/image/image_source_native.h multimedia/image_framework/image/image_packer_native.h multimedia/image_framework/image/pixelmap_native.h
+package = io.github.gycrosskit.media.image
+language = C++
+compilerOpts = -std=c++17
+# 只链接缩略图实际使用的 API 12 库，避免整包绑定附带未使用的新系统库。
+linkerOpts = -limage_source -limage_packer -lpixelmap
+enableUndefinedApiProtection = true
