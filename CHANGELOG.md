@@ -1,5 +1,9 @@
 # 更新日志
 
+## Unreleased
+
+- Kuikly KMP 与宿主统一为 `2.29.1-2.0.21-ohos`，配套 iOS/OHOS Renderer 固定 `2.29.1`；同步配置与锁文件，后续随宿主升级。尚未发布，完整 SDK 与消费验证分别记录。
+
 ## 0.1.8（发布候选，2026-10-08）
 
 修复 iOS 文件读取输入预算、取消与文件名一致性；Android MediaStore 提交需恰好更新一行。Swift 配套 native-0.1.4，HAR 0.1.6 沿用。

@@ -9,5 +9,5 @@
   },
   "repository": "https://github.com/gycrosskit/media",
   "license": "Apache-2.0",
-  "dependencies": { "@kuikly-open/render": "2.28.0" }
+  "dependencies": { "@kuikly-open/render": "2.29.1" }
 }

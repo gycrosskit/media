@@ -25,7 +25,7 @@ install! 'cocoapods', :integrate_targets => false
 platform :ios, '15.0'
 use_frameworks!
 target 'KuiklyRenderProbe' do
-  pod 'OpenKuiklyIOSRender', '2.28.0'
+  pod 'OpenKuiklyIOSRender', '2.29.1'
   unless ENV.fetch('GYC_MODULE_POD').empty?
     source = if ENV.fetch('GYC_MODULE_TAG').empty?
       { :path => ENV.fetch('GYC_MODULE_SOURCE') }
