@@ -7,7 +7,7 @@ plugins {
 }
 allprojects {
     group = providers.environmentVariable("GROUP").orElse("com.github.gycrosskit.media").get()
-    version = providers.environmentVariable("VERSION").orElse("0.1.9").get()
+    version = providers.environmentVariable("VERSION").orElse("1.0.0").get()
 }
 
 subprojects {

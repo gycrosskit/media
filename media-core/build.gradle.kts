@@ -12,7 +12,14 @@ kotlin {
     listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach {
         it.binaries.framework { baseName = "MediaCore"; isStatic = true }
     }
-    ohosArm64()
+    ohosArm64 {
+        compilations.getByName("main").cinterops.create("imageThumbnail") {
+            defFile(project.file("src/nativeInterop/cinterop/imageThumbnail.def"))
+            // OHOS 2.2.21 默认平台绑定已拆分；这里只引入图片 API 的头文件。
+            dependencyFiles = files()
+            extraOpts("-no-default-libs")
+        }
+    }
     sourceSets {
         commonMain.dependencies { implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2-1.0.0") }
         androidMain.dependencies {
@@ -20,7 +27,10 @@ kotlin {
             api("androidx.activity:activity:1.13.0")
             implementation("androidx.lifecycle:lifecycle-runtime:2.10.0")
         }
-        commonTest.dependencies { implementation(kotlin("test")) }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2-1.0.0")
+        }
         androidUnitTest.dependencies {
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2-1.0.0")
             implementation("org.robolectric:robolectric:4.16")
