@@ -1,6 +1,6 @@
 # GY CrossKit Media
 
-> 当前源码候选统一为 **1.0.0**：Maven（core/Kuikly）、iOS Pod 与 OHPM 使用同版；尚未发布，示例坐标须待发布后远程消费。本地验证使用显式源码/本地 HAR，Kuikly 基线为 2.29.1，真机与新版本远程消费另验。
+> 当前源码候选统一为 **1.0.1**：Maven（core/Kuikly）、iOS Pod 与 OHPM 使用同版；尚未发布，示例坐标须待发布后远程消费。本地验证使用显式源码/本地 HAR，Kuikly 基线为 2.29.1，真机与新版本远程消费另验。
 
 当前源码为未发布的 Kuikly 2.29.1 配套候选；带发布标签的说明保留历史范围。新增 API 必须消费配套源码，不能用旧远程版本验证代替。
 
@@ -133,19 +133,19 @@ Kuikly group 固定从腾讯 Maven 读取 metadata 和实际产物，避免其�
 
 ```kotlin
 commonMain.dependencies {
-    implementation("com.github.gycrosskit.media:media-core:1.0.0")
+    implementation("com.github.gycrosskit.media:media-core:1.0.1")
 }
 ohosArm64Main.dependencies {
-    implementation("com.github.gycrosskit.media:media-kuikly:1.0.0")
+    implementation("com.github.gycrosskit.media:media-kuikly:1.0.1")
 }
 ```
 
 iOS 在 Xcode 的 Package Dependencies 添加 `https://github.com/gycrosskit/media.git`，选择精确 revision/tag `native-0.1.4`，产品 `GycMedia`（该历史基线已有精确远程 iOS SDK 编译与链接记录；更早版本为 `0.1.2`）。KMP 不自动导入该 Swift Package，桥接步骤见接入指南。
 
-HarmonyOS 原生包独立安装，当前 HAR 目标为 `1.0.0`（未发布）。新版本 Registry 消费另验；历史固定 [0.1.6 Release HAR](https://github.com/gycrosskit/media/releases/tag/0.1.6) 消费分别验收，实际状态见顶部版本发布记录：
+HarmonyOS 原生包独立安装，当前 HAR 目标为 `1.0.1`（未发布）。新版本 Registry 消费另验；历史固定 [0.1.6 Release HAR](https://github.com/gycrosskit/media/releases/tag/0.1.6) 消费分别验收，实际状态见顶部版本发布记录：
 
 ```sh
-ohpm install @gycrosskit/media@1.0.0
+ohpm install @gycrosskit/media@1.0.1
 ```
 
 ## 最小使用
