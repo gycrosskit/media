@@ -1,7 +1,8 @@
 """检查实际发布文件与 Gradle 变体引用，避免本机源码编译掩盖损坏的 Maven 产物。"""
 import hashlib
+import io
 import json
-import sys
+import zipfile
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -14,6 +15,7 @@ parser.add_argument('version')
 parser.add_argument('modules_csv')
 parser.add_argument('native_targets_csv')
 parser.add_argument('publications_csv', nargs='?')
+parser.add_argument('--max-jvm-major', type=int, help='Maximum class-file major for runtime JVM JAR and Android AAR variants')
 parser.add_argument('--jvm-only', action='store_true', help='JVM JAR rather than Android AAR publication')
 parser.add_argument('--license', choices=('Apache-2.0', 'BSD-3-Clause'), default='Apache-2.0')
 args = parser.parse_args()
@@ -41,6 +43,18 @@ def check_sidecars(path):
         checksum = path.with_name(path.name + '.' + algorithm)
         assert checksum.is_file(), f'Missing checksum: {checksum}'
         assert checksum.read_text().strip() == digests(path)[algorithm], checksum
+
+
+def check_jvm_bytecode(source, label, require_classes=True):
+    with zipfile.ZipFile(source) as jar:
+        assert jar.testzip() is None, f"Corrupt ZIP entry: {label}"
+        classes = [name for name in jar.namelist() if name.endswith(".class")]
+        assert classes or not require_classes, f"Missing JVM classes: {label}"
+        for name in classes:
+            with jar.open(name) as entry_class:
+                header = entry_class.read(8)
+            assert len(header) == 8 and header[:4] == b"\xca\xfe\xba\xbe", f"Invalid class header: {label}!{name}"
+            assert int.from_bytes(header[6:8], "big") <= args.max_jvm_major, f"JVM bytecode exceeds major {args.max_jvm_major}: {label}!{name}"
 
 
 def resolve_artifact(path):
@@ -111,6 +125,16 @@ for module in modules:
             assert artifact.is_file(), artifact
             check_sidecars(artifact)
             assert artifact.stat().st_size == entry["size"], artifact
+            if args.max_jvm_major is not None and artifact.suffix == ".jar" and variant.get("attributes", {}).get("org.jetbrains.kotlin.platform.type") == "jvm":
+                check_jvm_bytecode(artifact, artifact)
+            if args.max_jvm_major is not None and artifact.suffix == ".aar":
+                # Android unit consumers 也在 Java 17 上加载 AAR 的 classes.jar。
+                with zipfile.ZipFile(artifact) as aar:
+                    assert aar.testzip() is None, f"Corrupt ZIP entry: {artifact}"
+                    assert "classes.jar" in aar.namelist(), f"Missing classes.jar: {artifact}"
+                    for name in aar.namelist():
+                        if name == "classes.jar" or (name.startswith("libs/") and name.endswith(".jar")):
+                            check_jvm_bytecode(io.BytesIO(aar.read(name)), f"{artifact}!{name}", require_classes=name == "classes.jar")
             for algorithm in ("md5", "sha1", "sha256", "sha512"):
                 assert digests(artifact)[algorithm] == entry[algorithm], artifact
 
