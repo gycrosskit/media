@@ -60,10 +60,16 @@ private final class Controller: UIViewController {
 
 @MainActor
 private func eventually(_ message: String, _ condition: () -> Bool) async {
+    print("WAIT: \(message)")
     for _ in 0..<100 {
-        if condition() { return }
+        if condition() {
+            print("SETTLED: \(message)")
+            return
+        }
         try? await Task.sleep(nanoseconds: 100_000_000)
     }
+    print("FAIL: \(message)")
+    fflush(stdout)
     fatalError(message)
 }
 
@@ -162,6 +168,7 @@ private func runChecks(window: UIWindow) async {
     }
 
     print("PHASE: Picker ownership")
+    print("CHECK: custom-visible-child")
     let custom = Presenter()
     let hidden = UIViewController()
     let active = UIViewController()
@@ -176,6 +183,7 @@ private func runChecks(window: UIWindow) async {
     await eventually("Custom container is not visible") { custom.appeared }
     precondition(UIKitPresentationContext.topViewController(from: custom) === active)
 
+    print("CHECK: unpresented-cancellation")
     root = Presenter()
     window.rootViewController = root
     root.controllers = []
@@ -193,6 +201,7 @@ private func runChecks(window: UIWindow) async {
     root.controllers = []
     root.actuallyPresent = true
     await eventually("Presenter is not visible") { root.appeared }
+    print("CHECK: replacement-old-delegate")
     let first = Callback(), second = Callback(), third = Callback()
     pick(first)
     let oldPicker = root.controllers[0] as! PHPickerViewController
@@ -210,6 +219,7 @@ private func runChecks(window: UIWindow) async {
     await eventually("Newest Picker did not cancel") { third.cancelled == 1 }
     precondition(first.cancelled == 1 && second.cancelled == 1)
 
+    print("CHECK: presenting-host")
     let movingPresenter = Presenter()
     root.present(movingPresenter, animated: true)
     let waiting = Callback(), latestWaiting = Callback()
@@ -221,6 +231,7 @@ private func runChecks(window: UIWindow) async {
     MediaClient.shared.cancelImagePicker()
     await eventually("Picker on a transitioning host did not cancel") { latestWaiting.cancelled == 1 }
 
+    print("CHECK: dismissing-host")
     movingPresenter.dismiss(animated: true)
     root.controllers = []
     root.actuallyPresent = false
@@ -233,6 +244,7 @@ private func runChecks(window: UIWindow) async {
 
     root.controllers = []
     root.actuallyPresent = false
+    print("CHECK: callback-reentry")
     let beforeReentry = Callback(), outer = Callback(), reentered = Callback()
     pick(beforeReentry)
     beforeReentry.onCancel = { pick(reentered) }
@@ -241,15 +253,18 @@ private func runChecks(window: UIWindow) async {
     MediaClient.shared.cancelImagePicker()
     precondition(reentered.cancelled == 1)
 
+    print("CHECK: nil-resolver")
     MediaClient.shared.presenterResolver = { nil }
     let unavailable = Callback()
     pick(unavailable)
     precondition(unavailable.failed == 1, "A nil resolver must not fall back to a different scene")
+    print("CHECK: off-window-resolver")
     MediaClient.shared.presenterResolver = { UIViewController() }
     let invisible = Callback()
     pick(invisible)
     precondition(invisible.failed == 1, "An off-window presenter must fail without blocking the Picker")
     MediaClient.shared.presenterResolver = { root }
+    print("CHECK: hidden-presenter")
     root.view.isHidden = true
     let hiddenPage = Callback()
     pick(hiddenPage)

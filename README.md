@@ -1,6 +1,6 @@
 # GY CrossKit Media
 
-> 当前源码候选统一为 **1.0.0**：Maven（core/Kuikly）、iOS Pod 与 OHPM 使用同版；尚未发布，示例坐标须待发布后远程消费。本地验证使用显式源码/本地 HAR，Kuikly 基线为 2.29.1，真机与新版本远程消费另验。
+> 当前源码候选统一为 **1.0.1**：Maven（core/Kuikly）、iOS Pod 与 OHPM 使用同版；尚未发布，示例坐标须待发布后远程消费。本地验证使用显式源码/本地 HAR，Kuikly 基线为 2.29.1，真机与新版本远程消费另验。
 
 当前源码为未发布的 Kuikly 2.29.1 配套候选；带发布标签的说明保留历史范围。新增 API 必须消费配套源码，不能用旧远程版本验证代替。
 
@@ -133,19 +133,19 @@ Kuikly group 固定从腾讯 Maven 读取 metadata 和实际产物，避免其�
 
 ```kotlin
 commonMain.dependencies {
-    implementation("com.github.gycrosskit.media:media-core:1.0.0")
+    implementation("com.github.gycrosskit.media:media-core:1.0.1")
 }
 ohosArm64Main.dependencies {
-    implementation("com.github.gycrosskit.media:media-kuikly:1.0.0")
+    implementation("com.github.gycrosskit.media:media-kuikly:1.0.1")
 }
 ```
 
 iOS 在 Xcode 的 Package Dependencies 添加 `https://github.com/gycrosskit/media.git`，选择精确 revision/tag `native-0.1.4`，产品 `GycMedia`（该历史基线已有精确远程 iOS SDK 编译与链接记录；更早版本为 `0.1.2`）。KMP 不自动导入该 Swift Package，桥接步骤见接入指南。
 
-HarmonyOS 原生包独立安装，当前 HAR 目标为 `1.0.0`（未发布）。新版本 Registry 消费另验；历史固定 [0.1.6 Release HAR](https://github.com/gycrosskit/media/releases/tag/0.1.6) 消费分别验收，实际状态见顶部版本发布记录：
+HarmonyOS 原生包独立安装，当前 HAR 目标为 `1.0.1`（未发布）。新版本 Registry 消费另验；历史固定 [0.1.6 Release HAR](https://github.com/gycrosskit/media/releases/tag/0.1.6) 消费分别验收，实际状态见顶部版本发布记录：
 
 ```sh
-ohpm install @gycrosskit/media@1.0.0
+ohpm install @gycrosskit/media@1.0.1
 ```
 
 ## 最小使用
@@ -205,10 +205,10 @@ iOS/HarmonyOS 按系统图像解码能力识别格式。不提供视频、上传
 
 ## 自动回归
 
-[Component regression](.github/workflows/regression.yml) 按事件分阶段：PR 先判断变更范围，仅源码变更运行已有 Android/Native 测试与编译；纯文档 PR 和 `main` push 只运行轻量脚本/配置检查。手动运行不填版本时执行源码回归，未知路径保守按源码处理。源码 PR 执行验收，main 保持轻量检查，Release 验证精确远程坐标与消费者；线上耗时以实际 Actions 运行为准。
+当前源码回归使用[统一远程验证（Jenkins）](https://github.com/gycrosskit/.github/blob/main/docs/统一远程验证.md)，按已推送源码 ref/SHA 选择对应组件；平台命令与参数以受信 Jenkins recipe 为准。实际执行范围、测试数量、结果与耗时以绑定源码/CI SHA 的构建回执为准，轻量检查或跳过不算平台测试通过。
 
-Maven Release 发布或手动填写精确已发布版本时，`verify-public` 统一校验一次冻结归档、精确 tag/commit、完整 publication 清单和公开文件；通过后 Android/Native 独立消费者从 JitPack 解析该版本。PR 不再反复消费旧基线；不使用 `mavenLocal`、本库源码或归档替换远程依赖。此流程不发布二进制。
+候选冻结与消费按[发布流程](https://github.com/gycrosskit/.github/blob/main/docs/发布流程.md)使用独立 Job：`component-ci/package` 绑定准确 SOURCE_SHA 生成冻结候选并验证私有消费，`component-ci/release` 绑定准确 Tag/候选执行发布及独立公开消费。核对冻结归档、精确 tag/commit、完整 publication 清单和公开文件，不使用 `mavenLocal`、本库源码或 staging 替换公开依赖；各阶段证据分别记录。
 
 OHOS KLIB 编译不代表 HAR 构建、ohpm 上架或真机验收。当前没有已确认可用的 DevEco/Hvigor runner，这些检查尚未自动化，不能作为 CI 通过范围。
 
-阶段、缓存、有限网络重试、失败记录与证据边界见[共用 CI 规则](https://github.com/gycrosskit/.github/blob/main/docs/持续集成门禁.md)；本库实际平台命令以 workflow 为准。源码通过、远程消费、HAR/ohpm 与设备验收分别记录。
+阶段、缓存、有限网络重试、失败记录与证据边界见[共用 CI 规则](https://github.com/gycrosskit/.github/blob/main/docs/持续集成门禁.md)；本库实际平台命令以 Jenkins 的固定版本 recipe 为准。源码通过、远程消费、HAR/ohpm 与设备验收分别记录。
