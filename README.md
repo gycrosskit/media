@@ -1,6 +1,6 @@
 # GY CrossKit Media
 
-> 当前源码候选统一为 **1.0.1**：Maven（core/Kuikly）、iOS Pod 与 OHPM 使用同版；尚未发布，示例坐标须待发布后远程消费。本地验证使用显式源码/本地 HAR，Kuikly 基线为 2.29.1，真机与新版本远程消费另验。
+> 当前 Maven 源码候选为 **1.0.2**，尚未发布或通过公开消费：OHOS 的真实 imageThumbnail cinterop 改为独立 `media-cinterop-ohosarm64` 模块，由 core 正常传递依赖，保留原 KLIB 内容与校验。此布局避免同一模块中两个 KLIB 的 classifier URL 冲突，仍须远程打包与 JitPack 公开消费确认。原 1.0.1 Tag/归档及其他渠道候选保留；Kuikly 基线为 2.29.1，真机行为另验。
 
 当前源码为未发布的 Kuikly 2.29.1 配套候选；带发布标签的说明保留历史范围。新增 API 必须消费配套源码，不能用旧远程版本验证代替。
 
@@ -133,10 +133,10 @@ Kuikly group 固定从腾讯 Maven 读取 metadata 和实际产物，避免其�
 
 ```kotlin
 commonMain.dependencies {
-    implementation("com.github.gycrosskit.media:media-core:1.0.1")
+    implementation("com.github.gycrosskit.media:media-core:1.0.2")
 }
 ohosArm64Main.dependencies {
-    implementation("com.github.gycrosskit.media:media-kuikly:1.0.1")
+    implementation("com.github.gycrosskit.media:media-kuikly:1.0.2")
 }
 ```
 
