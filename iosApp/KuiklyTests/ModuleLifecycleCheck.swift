@@ -133,13 +133,24 @@ private func checks() async {
 }
 
 @main
-private final class CheckApp: UIResponder, UIApplicationDelegate {
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+private final class CheckApp: UIResponder, UIApplicationDelegate {}
+
+// UIKit requires a connected Scene before these native behavior checks run.
+@objc(GYCNativeCheckScene)
+private final class CheckScene: UIResponder, UIWindowSceneDelegate {
+    var window: UIWindow?
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        guard let windowScene = scene as? UIWindowScene else {
+            preconditionFailure("Native check requires an iPhone Window Scene")
+        }
+        let window = UIWindow(windowScene: windowScene)
+        self.window = window
+        window.rootViewController = UIViewController()
+        window.makeKeyAndVisible()
         Task { @MainActor in
             await checks()
             fflush(stdout)
             exit(0)
         }
-        return true
     }
 }
