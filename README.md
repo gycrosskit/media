@@ -1,5 +1,7 @@
 # GY CrossKit Media
 
+Kuikly 由宿主统一选择版本；组件构建基线、允许范围及消费验证边界见[功能与平台差异](docs/功能与平台差异.md#kuikly-版本与宿主选择)。
+
 > Maven **1.0.2** 已发布：[Release](https://github.com/gycrosskit/media/releases/tag/1.0.2)。13 个 publications 的公开元数据与字节核验、公开 OHOS 编译消费已完成；真实 imageThumbnail cinterop 使用独立 `media-cinterop-ohosarm64` 模块，由 core 正常传递依赖，保留两个真实 KLIB。HarmonyOS HAR/OHPM 当前源码候选为 **1.0.2**，须独立构建、发布及 Registry 验收；旧版本 Tag/归档保留，iOS 版本不随本次鸿蒙版本调整，真机行为另验。
 
 当前源码配套 Kuikly 2.29.1；各渠道发布状态分别记录，带发布标签的说明保留历史范围。新增 API 必须消费配套版本，不能用旧远程版本验证代替。

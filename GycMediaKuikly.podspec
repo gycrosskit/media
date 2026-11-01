@@ -11,6 +11,6 @@ Pod::Spec.new do |spec|
   spec.default_subspec = 'Kuikly'
   spec.subspec 'Kuikly' do |kuikly|
     kuikly.source_files = 'iosApp/Sources/GycMediaKuikly/*.swift'
-    kuikly.dependency 'OpenKuiklyIOSRender', '2.29.1'
+    kuikly.dependency 'OpenKuiklyIOSRender', '>= 2.29.1', '< 3.0'
   end
 end
