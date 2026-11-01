@@ -15,9 +15,10 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
-        maven {
-            url = uri(providers.gradleProperty("mediaMavenRepo").orElse("https://jitpack.io").get())
-            content { includeGroup("com.github.gycrosskit.media") }
+        // 私有候选缺失时必须失败，不能从其它仓库取得旧版本冒充源码消费。
+        exclusiveContent {
+            forRepository { maven { url = uri(providers.gradleProperty("mediaMavenRepo").orElse("https://jitpack.io").get()) } }
+            filter { includeGroup("com.github.gycrosskit.media") }
         }
         maven { url = uri("https://maven.eazytec-cloud.com/nexus/repository/maven-public/"); content { includeVersionByRegex(".*", ".*", ".*-1\\.0\\.0") } }
         maven { url = uri("https://maven.aliyun.com/repository/google") }

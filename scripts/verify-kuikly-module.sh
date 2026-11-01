@@ -20,6 +20,13 @@ cat > "$app/Info.plist" <<'PLIST'
 <key>CFBundleVersion</key><string>1</string>
 <key>CFBundleShortVersionString</key><string>1.0</string>
 <key>LSRequiresIPhoneOS</key><true/>
+<key>UIApplicationSceneManifest</key><dict>
+<key>UIApplicationSupportsMultipleScenes</key><false/>
+<key>UISceneConfigurations</key><dict>
+<key>UIWindowSceneSessionRoleApplication</key><array><dict>
+<key>UISceneConfigurationName</key><string>NativeCheck</string>
+<key>UISceneDelegateClassName</key><string>GYCNativeCheckScene</string>
+</dict></array></dict></dict>
 </dict></plist>
 PLIST
 codesign --force --sign - "$app/Frameworks/GycMediaKuikly.framework" "$app/Frameworks/OpenKuiklyIOSRender.framework" "$app" >/dev/null
