@@ -2,9 +2,9 @@
 
 Kuikly 由宿主统一选择版本；组件构建基线、允许范围及消费验证边界见[功能与平台差异](docs/功能与平台差异.md#kuikly-版本与宿主选择)。
 
-> Maven **1.0.2** 已发布：[Release](https://github.com/gycrosskit/media/releases/tag/1.0.2)。13 个 publications 的公开元数据与字节核验、公开 OHOS 编译消费已完成；真实 imageThumbnail cinterop 使用独立 `media-cinterop-ohosarm64` 模块，由 core 正常传递依赖，保留两个真实 KLIB。HarmonyOS HAR/OHPM 当前源码候选为 **1.0.2**，须独立构建、发布及 Registry 验收；旧版本 Tag/归档保留，iOS 版本不随本次鸿蒙版本调整，真机行为另验。
+> Maven **1.0.2** 已发布：[Release](https://github.com/gycrosskit/media/releases/tag/1.0.2)。13 个 publications 的公开元数据与字节核验、公开 OHOS 编译消费已完成；真实 imageThumbnail cinterop 使用独立 `media-cinterop-ohosarm64` 模块，由 core 正常传递依赖，保留两个真实 KLIB。HarmonyOS HAR/OHPM 为 **1.0.3**（`har-1.0.3`），iOS Git Pod 为 `1.0.2`（`native-1.0.2`）；发布与精确消费状态见对应 Release，旧版本 Tag/归档保留，真机行为另验。
 
-当前源码配套 Kuikly 2.29.1；各渠道发布状态分别记录，带发布标签的说明保留历史范围。新增 API 必须消费配套版本，不能用旧远程版本验证代替。
+组件构建最低基线为 Kuikly 2.29.1；允许范围、宿主选择及 2.30 消费边界见[功能与平台差异](docs/功能与平台差异.md#kuikly-版本与宿主选择)。各渠道与带日期的历史验收范围分别记录。
 
 已发布基线 Maven `0.1.9` 提供 `media-kuikly` Android、iosArm64、iosX64、iosSimulatorArm64 targets、原生 receiver 和每 Renderer handler。iOS 可选 Pod `GycMediaKuikly/Kuikly` `0.1.9` 使用真实 `OpenKuiklyIOSRender 2.28.0`；Kotlin handler 由宿主已有 Shared framework 导出。发布与远程消费状态以[对应 Release](https://github.com/gycrosskit/media/releases/tag/0.1.9)为准。历史基线 Maven `0.1.8` 的 `-kuikly` 仅含 OHOS 变体；原 HAR 沿用。宿主需注册并维护已有原生能力 owner，示例见[接入指南](docs/接入指南.md#androidios-kuikly-native-module)。
 
@@ -144,10 +144,10 @@ ohosArm64Main.dependencies {
 
 iOS 在 Xcode 的 Package Dependencies 添加 `https://github.com/gycrosskit/media.git`，选择精确 revision/tag `native-0.1.4`，产品 `GycMedia`（该历史基线已有精确远程 iOS SDK 编译与链接记录；更早版本为 `0.1.2`）。KMP 不自动导入该 Swift Package，桥接步骤见接入指南。
 
-HarmonyOS 原生包独立安装，当前 HAR/OHPM 目标为 `1.0.2`（待发布）。新版本 Registry 消费另验；历史固定 [0.1.6 Release HAR](https://github.com/gycrosskit/media/releases/tag/0.1.6) 消费分别验收，实际状态见顶部版本发布记录：
+HarmonyOS 原生包独立安装，HAR/OHPM 为 `1.0.3`，发布与精确 Registry 消费状态见对应 Release；历史固定 [0.1.6 Release HAR](https://github.com/gycrosskit/media/releases/tag/0.1.6) 消费分别验收，实际状态见顶部版本发布记录：
 
 ```sh
-ohpm install @gycrosskit/media@1.0.2
+ohpm install @gycrosskit/media@1.0.3
 ```
 
 ## 最小使用
