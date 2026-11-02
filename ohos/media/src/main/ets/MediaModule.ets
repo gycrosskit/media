@@ -1,6 +1,6 @@
 import { KRAny, KuiklyRenderBaseModule, KuiklyRenderCallback } from '@kuikly-open/render';
-import { camera, cameraPicker } from '@kit.CameraKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
+import { MediaFilePicker, MediaFileSelectionResult } from './MediaFilePicker';
 import { image } from '@kit.ImageKit';
 import { fileIo as fs, fileUri } from '@kit.CoreFileKit';
 import { util } from '@kit.ArkTS';
@@ -107,31 +107,22 @@ export class MediaModule extends KuiklyRenderBaseModule {
     }
     if (this.picking) { return { status: 'busy' }; }
     this.picking = true;
-    let cameraPath = '';
+    const picker = new MediaFilePicker();
     try {
-      let uris: string[];
-      if (args.source === 'CAMERA') {
-        cameraPath = this.tempPath('jpg');
-        const file = await fs.open(cameraPath, fs.OpenMode.CREATE | fs.OpenMode.READ_WRITE);
-        await fs.close(file);
-        if (this.destroyed || request.cancelled) { return { status: 'cancelled' }; }
-        const capture = await cameraPicker.pick(context, [cameraPicker.PickerMediaType.PHOTO], {
-          cameraPosition: camera.CameraPosition.CAMERA_POSITION_BACK,
-          saveUri: fileUri.getUriFromPath(cameraPath)
-        });
-        if (this.destroyed || request.cancelled) { return { status: 'cancelled' }; }
-        // API 仅承诺 -1 为失败，不能把权限或相机失败一律当作取消。
-        if (capture.resultCode !== 0) { return { status: 'failed' }; }
-        if (!capture.resultUri) { return { status: 'cancelled' }; }
-        uris = [capture.resultUri];
-      } else if (args.source === 'GALLERY') {
-        const picker = new photoAccessHelper.PhotoViewPicker();
-        const selected = await picker.select({
-          MIMEType: photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE, maxSelectNumber: count
-        });
-        if (this.destroyed || request.cancelled) { return { status: 'cancelled' }; }
-        uris = selected.photoUris;
-      } else { return { status: 'failed' }; }
+      if (args.source !== 'CAMERA' && args.source !== 'GALLERY') { return { status: 'failed' }; }
+      const selected = await new Promise<MediaFileSelectionResult>((resolve) => picker.select({
+        context, uiContext: null, acceptTypes: ['image/*'], multiple: args.source === 'GALLERY' && count > 1,
+        capture: args.source === 'CAMERA', captureEnabled: true, maxFiles: count, maxBytes: this.maxBytes,
+        // 旧选图以 ImageSource 实际解码判定格式；文件名可能不携带图片扩展名。
+        validateMime: false, valid: () => !this.destroyed && !request.cancelled,
+        visible: () => true, waitVisible: () => Promise.resolve(), authorizeCapture: () => Promise.resolve(true),
+      }, resolve));
+      if (this.destroyed || request.cancelled) { return { status: 'cancelled' }; }
+      if (selected.status === 'tooLarge') { return { status: 'too_large' }; }
+      if (selected.status === 'permissionDenied') { return { status: 'permission_denied' }; }
+      if (selected.status === 'notGranted') { return { status: 'cancelled' }; }
+      if (selected.status !== 'selected') { return { status: selected.status }; }
+      const uris = selected.files.map(file => file.uri);
       if (uris.length === 0) { return { status: 'cancelled' }; }
       if (this.destroyed || request.cancelled) { return { status: 'cancelled' }; }
       const images: MediaImage[] = [];
@@ -175,7 +166,7 @@ export class MediaModule extends KuiklyRenderBaseModule {
       return { status: 'selected', images };
     } finally {
       this.picking = false;
-      if (cameraPath) { await this.removeTemp(cameraPath); }
+      picker.revoke();
     }
   }
 

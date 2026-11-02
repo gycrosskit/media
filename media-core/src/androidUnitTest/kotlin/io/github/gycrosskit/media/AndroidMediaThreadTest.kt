@@ -75,7 +75,7 @@ class AndroidMediaThreadTest {
             val next = async { picker.pick(ImagePickerRequest(ImagePickerSource.GALLERY)) }
             runCurrent(); main.runCurrent()
             assertTrue(!next.isCompleted)
-            registry.dispatchResult(registry.code, null as android.net.Uri?)
+            registry.dispatchResult(registry.code, Activity.RESULT_CANCELED, null)
             main.runCurrent(); runCurrent()
             assertEquals(ImagePickerResult.Cancelled, next.await())
         } finally {
@@ -97,12 +97,12 @@ class AndroidMediaThreadTest {
         try {
             val old = async { first.pick(ImagePickerRequest(ImagePickerSource.CAMERA)) }
             runCurrent(); main.runCurrent()
-            val firstUri = registry.input as android.net.Uri
+            val firstUri = (registry.input as android.content.Intent).getParcelableExtra<android.net.Uri>(android.provider.MediaStore.EXTRA_OUTPUT)!!
             val directory = requireNotNull(activity.getExternalFilesDir(android.os.Environment.DIRECTORY_PICTURES))
             val firstFile = java.io.File(directory, requireNotNull(firstUri.lastPathSegment)).apply { writeBytes(byteArrayOf(1)) }
             val next = async { second.pick(ImagePickerRequest(ImagePickerSource.CAMERA)) }
             runCurrent(); main.runCurrent()
-            val secondUri = registry.input as android.net.Uri
+            val secondUri = (registry.input as android.content.Intent).getParcelableExtra<android.net.Uri>(android.provider.MediaStore.EXTRA_OUTPUT)!!
             val secondFile = java.io.File(directory, requireNotNull(secondUri.lastPathSegment)).apply { writeBytes(byteArrayOf(2)) }
             assertTrue(firstUri != secondUri)
             first.dispose(); main.runCurrent(); runCurrent()
