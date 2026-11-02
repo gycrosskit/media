@@ -1,6 +1,6 @@
 Pod::Spec.new do |spec|
   spec.name = 'GycMediaKuikly'
-  spec.version = '1.0.2'
+  spec.version = '1.1.0'
   spec.summary = 'GY CrossKit media Kuikly native receiver.'
   spec.homepage = 'https://github.com/gycrosskit/media'
   spec.license = { :type => 'Apache-2.0', :file => 'LICENSE' }

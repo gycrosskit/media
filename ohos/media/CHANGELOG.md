@@ -1,5 +1,11 @@
 # 更新日志
 
+## 1.1.0
+
+- 新增三端原始文件／媒体选择，交付 URI/URL、元数据与资源释放合同；旧图像选择 API 保留数量及 32 MiB 聚合预算。
+- Maven、Swift Package `GycMedia`（`native-1.1.0`）与私有 OHPM/HAR（`har-1.1.0`）版本同步；配套 Podspec 同步 `1.1.0` 以符合 Native 渠道合同，不代表已发布 Git Pod。
+- 宿主负责 WebView 适配、上传和临时文件消费；迁移见[接入指南](../../docs/接入指南.md#110-接入与迁移)。源码、制品、远程消费与真机验收分别确认，旧 Tag/checksum 保留。
+
 ## Native 1.0.2 / HAR 1.0.3
 
 - iOS Git Pod 使用 `native-1.0.2`，HAR/OHPM 使用 `har-1.0.3`；Maven 保留 `1.0.2`，不重发未修改的 KMP 产物。
