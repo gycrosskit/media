@@ -19,7 +19,8 @@ target="$(uname -m)-apple-ios14.0-simulator"
 output="$PWD/build/ios-picker-check"
 app="$output/PickerCheck.app"
 mkdir -p "$app/Frameworks" "$output/module"
-xcrun --sdk iphonesimulator swiftc -emit-library -emit-module -enable-testing -module-name GycMedia \
+xcrun swift iosApp/Fixtures/CreateMovie.swift "$app/capture.mov"
+xcrun --sdk iphonesimulator swiftc -D DEBUG -emit-library -emit-module -enable-testing -module-name GycMedia \
     -target "$target" -sdk "$sdk" -emit-module-path "$output/module/GycMedia.swiftmodule" \
     -Xlinker -install_name -Xlinker @rpath/libGycMedia.dylib \
     iosApp/Sources/GycMedia/*.swift -o "$app/Frameworks/libGycMedia.dylib"
@@ -37,6 +38,8 @@ cat > "$app/Info.plist" <<'PLIST'
 <key>CFBundleVersion</key><string>1</string>
 <key>CFBundleShortVersionString</key><string>1.0</string>
 <key>LSRequiresIPhoneOS</key><true/>
+<key>NSCameraUsageDescription</key><string>Native fixture camera</string>
+<key>NSMicrophoneUsageDescription</key><string>Native fixture recording</string>
 <key>UIApplicationSceneManifest</key><dict>
 <key>UIApplicationSupportsMultipleScenes</key><false/>
 <key>UISceneConfigurations</key><dict>

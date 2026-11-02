@@ -39,6 +39,23 @@ function fixture(options = {}) {
     };
   };
   const mocks = {
+    './MediaFilePicker': { MediaFilePicker: class {
+      select(request, done) {
+        events.rawRequest = request;
+        if (options.rawResult) { done(options.rawResult); return; }
+        if (request.capture) {
+          this.cameraPath = '/cache/mock-camera.jpg'; events.opened.push(this.cameraPath); events.closed.push(1);
+          (options.capture?.() || Promise.resolve({ resultCode: 0, resultUri: 'camera' })).then(result => {
+            done(!request.valid() ? { status: 'cancelled', files: [] } : result.resultCode !== 0 ? { status: 'failed', files: [] } :
+              { status: 'selected', files: [{ uri: result.resultUri }] });
+          });
+        } else {
+          events.selected++;
+          (options.select?.() || Promise.resolve({ photoUris: ['image'] })).then(result => done({ status: result.photoUris.length ? 'selected' : 'cancelled', files: result.photoUris.map(uri => ({ uri })) }));
+        }
+      }
+      revoke() { if (this.cameraPath) events.removed.push(this.cameraPath); }
+    } },
     '@kuikly-open/render': { KuiklyRenderBaseModule: BaseModule },
     '@kit.CameraKit': { camera: { CameraPosition: { CAMERA_POSITION_BACK: 0 } }, cameraPicker: {
       PickerMediaType: { PHOTO: 0 }, pick: options.capture || (async () => ({ resultCode: 0, resultUri: 'camera' }))
@@ -85,6 +102,17 @@ function invoke(module, method, args) {
 }
 function cancel(module, requestId) { module.call('cancel', JSON.stringify({ requestId }), null); }
 const pick = requestId => ({ requestId, source: 'GALLERY', maxCount: 1, maxDimension: 0, jpegQuality: 0 });
+
+test('legacy image selection delegates to raw picker with its own limits and status mapping', async () => {
+  for (const [raw, expected] of [['tooLarge', 'too_large'], ['permissionDenied', 'permission_denied'], ['notGranted', 'cancelled']]) {
+    const { module, events } = fixture({ rawResult: { status: raw, files: [] } });
+    const responses = invoke(module, 'pick', { ...pick(raw), maxCount: 500 });
+    await flush();
+    assert.equal(responses[0].status, expected);
+    assert.equal(events.rawRequest.maxFiles, 500); assert.equal(events.rawRequest.maxBytes, 32 * 1024 * 1024);
+    assert.equal(events.rawRequest.uiContext, null); assert.equal(events.rawRequest.validateMime, false);
+  }
+});
 
 test('two Module instances at the same millisecond own different temporary files', async () => {
   const first = fixture(), second = fixture();

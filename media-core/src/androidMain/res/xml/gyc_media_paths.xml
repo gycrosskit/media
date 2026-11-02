@@ -1,1 +1,1 @@
-<paths><external-files-path name="media" path="Pictures/" /></paths>
+<paths><external-files-path name="media" path="Pictures/" /><external-files-path name="media_video" path="Movies/" /></paths>

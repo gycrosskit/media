@@ -1,15 +1,15 @@
 # @gycrosskit/media
 
-> iOS Git Pod `1.0.2`（`native-1.0.2`），HAR/OHPM `1.0.3`（`har-1.0.3`）；Maven 保留 `1.0.2`。发布与精确消费状态见对应 Release；旧 Tag、归档及摘要不变。
+> 版本 `1.1.0`：Maven、Swift Package `GycMedia`（`native-1.1.0`）与私有 OHPM/HAR（`har-1.1.0`）。各渠道发布与精确远程消费状态以对应 Release 为准，设备验收单独记录。
 
-适用版本：此版 Maven `0.1.7` 复用已发布 HAR `0.1.6` 的原字节。完整功能与五入口限制见[功能与平台差异](https://github.com/gycrosskit/media/blob/0.1.7/docs/功能与平台差异.md)；本版发布记录见[Release](https://github.com/gycrosskit/media/releases/tag/0.1.7)。此源码 README 的文档更新不重新发布或修改既有 HAR。
+历史 `0.1.7` 记录：该轮 Maven `0.1.7` 复用已发布 HAR `0.1.6` 的原字节。完整功能与五入口限制见[功能与平台差异](https://github.com/gycrosskit/media/blob/0.1.7/docs/功能与平台差异.md)；本版发布记录见[Release](https://github.com/gycrosskit/media/releases/tag/0.1.7)。该轮 README 文档更新未重新发布或修改当时的既有 HAR。
 
 HAR `0.1.6` 已发布；Registry 精确安装与固定 Release HAR 消费分别验收，不以一个渠道代替另一个。
 
 系统选图、拍照、可选 JPEG 压缩和相册保存的 Kuikly Module。当前 HAR target/compatible SDK 为 HarmonyOS API 22。
 
 ```sh
-ohpm install @gycrosskit/media@1.0.3
+ohpm install @gycrosskit/media@1.1.0
 ```
 
 ```typescript

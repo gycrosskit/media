@@ -1,22 +1,13 @@
 package io.github.gycrosskit.media
 
 import android.Manifest
-import android.app.Activity
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
-import android.os.Environment
 import androidx.activity.ComponentActivity
-import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
-import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import java.io.ByteArrayOutputStream
-import java.io.File
 import java.io.InputStream
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
@@ -30,7 +21,7 @@ import kotlinx.coroutines.withContext
 /**
  * Android 系统选图统一实现。
  *
- * 每次请求独立注册 Launcher，完成、取消或宿主销毁后立即注销。
+ * 原始文件选择交给 filePicker；本层只读取、处理图片并释放本次文件结果。
  * @param permission 宿主权限能力，在 Main 调用；业务负责申请时机与提示。
  * @param fileProviderAuthority 默认 packageName.gycrosskit.media，须与宿主 Manifest 配置一致。
  */
@@ -64,127 +55,70 @@ class AndroidImagePickerPlatform(
         return result
     }
 
+    val filePicker = AndroidFilePicker(activity, fileProviderAuthority)
+
     private suspend fun pickAuthorized(request: ImagePickerRequest): ImagePickerResult =
         suspendCancellableCoroutine { continuation ->
             activeRequest?.invoke()
-            val registry = activity.activityResultRegistry
-            val suffix = "${System.identityHashCode(this)}_${System.nanoTime()}"
-            var cameraOutputUri: Uri? = null
-            var cameraOutputFile: File? = null
+            var cancelPicker: (() -> Unit)? = null
             var imageReadJob: Job? = null
-            val launchers = mutableListOf<ActivityResultLauncher<*>>()
+            var releaseFiles: (() -> Unit)? = null
             lateinit var requestOwner: () -> Unit
-
             fun cleanup() {
-                imageReadJob?.cancel()
-                imageReadJob = null
-                launchers.forEach { it.unregister() }
-                launchers.clear()
-                cameraOutputUri = null
-                cameraOutputFile?.delete()
-                cameraOutputFile = null
+                imageReadJob?.cancel(); imageReadJob = null
+                cancelPicker?.invoke(); cancelPicker = null
+                releaseFiles?.invoke(); releaseFiles = null
                 if (activeRequest === requestOwner) activeRequest = null
             }
-
             fun finish(result: ImagePickerResult) {
                 cleanup()
                 if (continuation.isActive) continuation.resume(result)
             }
-
-            fun finishSelection(uris: List<Uri>) {
-                if (!continuation.isActive) {
-                    cleanup()
-                    return
-                }
-                if (uris.isEmpty()) {
-                    finish(ImagePickerResult.Cancelled)
-                    return
-                }
-                imageReadJob = activity.lifecycleScope.launch {
-                    val images = try {
-                        withContext(Dispatchers.IO) {
-                            var remainingOriginal = ImageContentPolicy.maxBytes
-                            var remainingOutput = ImageContentPolicy.maxBytes
-                            uris.distinctBy(Uri::toString).take(request.maxCount).mapIndexedNotNull { index, uri ->
-                                val original = try {
-                                    activity.contentResolver.openInputStream(uri)?.use { it.readImageBytes(remainingOriginal) }
-                                } catch (error: Exception) {
-                                    if (error is ImageSizeExceeded || error is CancellationException) throw error
-                                    null
-                                }
-                                    ?: return@mapIndexedNotNull null
-                                if (original.isEmpty()) return@mapIndexedNotNull null
-                                remainingOriginal -= original.size
-                                readImage(index, uri, request, original)?.also { image ->
-                                    remainingOutput -= image.bytes.size
-                                    if (remainingOutput < 0) throw ImageSizeExceeded()
-                                }
-                            }
-                        }
-                    } catch (_: ImageSizeExceeded) {
-                        imageReadJob = null
-                        finish(ImagePickerResult.Failed(ImageContentPolicy.limitExceededMessage))
-                        return@launch
-                    }
-                    imageReadJob = null
-                    finish(
-                        images.takeIf(List<PickedImage>::isNotEmpty)
-                            ?.let(ImagePickerResult::Selected)
-                            ?: ImagePickerResult.Failed("无法读取所选图片"),
-                    )
-                }
-            }
-
-            requestOwner = {
-                cleanup()
-                continuation.cancel()
-            }
+            requestOwner = { cleanup(); continuation.cancel() }
             activeRequest = requestOwner
-
             continuation.invokeOnCancellation { activity.runOnUiThread { cleanup() } }
             if (!continuation.isActive) return@suspendCancellableCoroutine
-
-            try {
-                when (request.source) {
-                    ImagePickerSource.CAMERA -> {
-                        val cameraLauncher = registry.register(
-                            "image_picker_camera_$suffix",
-                            ActivityResultContracts.TakePicture(),
-                        ) { success ->
-                            if (success) finishSelection(listOfNotNull(cameraOutputUri))
-                            else finish(ImagePickerResult.Cancelled)
-                        }
-                        launchers += cameraLauncher
-
-                        runCatching {
-                            val imageFile = File(
-                                activity.getExternalFilesDir(Environment.DIRECTORY_PICTURES),
-                                "picked_$suffix.jpg",
-                            ).apply { parentFile?.mkdirs() }
-                            cameraOutputFile = imageFile
-                            val uri = FileProvider.getUriForFile(
-                                activity,
-                                fileProviderAuthority,
-                                imageFile,
-                            )
-                            cameraOutputUri = uri
-                            cameraLauncher.launch(uri)
-                        }.onFailure {
-                            android.util.Log.e("GycMedia", "打开系统相机失败", it)
-                            finish(ImagePickerResult.Failed("无法打开系统相机"))
+            cancelPicker = filePicker.pick(AndroidFilePickerRequest(
+                acceptTypes = listOf("image/*"), maxCount = request.maxCount,
+                capture = request.source == ImagePickerSource.CAMERA,
+            )) { result ->
+                when (result) {
+                    AndroidFilePickerResult.Cancelled -> finish(ImagePickerResult.Cancelled)
+                    AndroidFilePickerResult.PermissionDenied -> finish(ImagePickerResult.PermissionDenied)
+                    AndroidFilePickerResult.PermissionBlocked -> finish(ImagePickerResult.PermissionBlocked)
+                    AndroidFilePickerResult.PermissionRestricted -> finish(ImagePickerResult.PermissionRestricted)
+                    is AndroidFilePickerResult.Failed -> finish(ImagePickerResult.Failed(result.message))
+                    is AndroidFilePickerResult.Selected -> {
+                        releaseFiles = result.release
+                        imageReadJob = activity.lifecycleScope.launch {
+                            val images = try {
+                                withContext(Dispatchers.IO) {
+                                    var remainingOriginal = ImageContentPolicy.maxBytes
+                                    var remainingOutput = ImageContentPolicy.maxBytes
+                                    result.files.distinctBy { it.uri.toString() }.take(request.maxCount).mapIndexedNotNull { index, file ->
+                                        val original = try {
+                                            activity.contentResolver.openInputStream(file.uri)?.use { it.readImageBytes(remainingOriginal) }
+                                        } catch (error: Exception) {
+                                            if (error is ImageSizeExceeded || error is CancellationException) throw error
+                                            null
+                                        } ?: return@mapIndexedNotNull null
+                                        if (original.isEmpty()) return@mapIndexedNotNull null
+                                        remainingOriginal -= original.size
+                                        readImage(index, file.uri, request, original)?.also { image ->
+                                            remainingOutput -= image.bytes.size
+                                            if (remainingOutput < 0) throw ImageSizeExceeded()
+                                        }
+                                    }
+                                }
+                            } catch (_: ImageSizeExceeded) {
+                                imageReadJob = null; finish(ImagePickerResult.Failed(ImageContentPolicy.limitExceededMessage)); return@launch
+                            }
+                            imageReadJob = null
+                            finish(images.takeIf(List<PickedImage>::isNotEmpty)?.let(ImagePickerResult::Selected)
+                                ?: ImagePickerResult.Failed("无法读取所选图片"))
                         }
                     }
-                    ImagePickerSource.GALLERY -> launchGallery(
-                        suffix = suffix,
-                        maxCount = request.maxCount,
-                        launchers = launchers,
-                        finishSelection = ::finishSelection,
-                        finish = ::finish,
-                    )
                 }
-            } catch (error: Exception) {
-                android.util.Log.e("GycMedia", "打开系统图片选择器失败", error)
-                finish(ImagePickerResult.Failed("无法打开系统图片选择器"))
             }
         }
 
@@ -194,63 +128,7 @@ class AndroidImagePickerPlatform(
             sequence++
             activeRequest?.invoke()
             activeRequest = null
-        }
-    }
-
-    private fun launchGallery(
-        suffix: String,
-        maxCount: Int,
-        launchers: MutableList<ActivityResultLauncher<*>>,
-        finishSelection: (List<Uri>) -> Unit,
-        finish: (ImagePickerResult) -> Unit,
-    ) {
-        val registry = activity.activityResultRegistry
-        if (PickVisualMedia.isPhotoPickerAvailable(activity)) {
-            if (maxCount == 1) {
-                val picker = registry.register(
-                    "image_picker_photo_$suffix",
-                    ActivityResultContracts.PickVisualMedia(),
-                ) { uri -> finishSelection(listOfNotNull(uri)) }
-                launchers += picker
-                picker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
-            } else {
-                val picker = registry.register(
-                    "image_picker_photos_$suffix",
-                    ActivityResultContracts.PickMultipleVisualMedia(maxCount),
-                ) { finishSelection(it) }
-                launchers += picker
-                picker.launch(PickVisualMediaRequest(PickVisualMedia.ImageOnly))
-            }
-            return
-        }
-
-        val picker = registry.register(
-            "image_picker_legacy_$suffix",
-            ActivityResultContracts.StartActivityForResult(),
-        ) { result ->
-            if (result.resultCode != Activity.RESULT_OK) {
-                finish(ImagePickerResult.Cancelled)
-            } else {
-                val uris = mutableListOf<Uri>()
-                result.data?.clipData?.let { clip ->
-                    repeat(clip.itemCount) { index -> clip.getItemAt(index).uri?.let(uris::add) }
-                } ?: result.data?.data?.let(uris::add)
-                finishSelection(uris)
-            }
-        }
-        launchers += picker
-        runCatching {
-            picker.launch(
-                Intent(Intent.ACTION_GET_CONTENT).apply {
-                    type = "image/*"
-                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, maxCount > 1)
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                },
-            )
-        }.onFailure {
-            android.util.Log.e("GycMedia", "打开系统相册失败", it)
-            finish(ImagePickerResult.Failed("无法打开系统相册"))
+            filePicker.dispose()
         }
     }
 

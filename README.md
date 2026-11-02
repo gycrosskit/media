@@ -1,8 +1,10 @@
 # GY CrossKit Media
 
+> 版本 `1.1.0`：Maven、Swift Package `GycMedia`（`native-1.1.0`）与私有 OHPM/HAR（`har-1.1.0`）。各渠道发布与精确远程消费状态以对应 Release 为准，设备验收单独记录。
+
 Kuikly 由宿主统一选择版本；组件构建基线、允许范围及消费验证边界见[功能与平台差异](docs/功能与平台差异.md#kuikly-版本与宿主选择)。
 
-> Maven **1.0.2** 已发布：[Release](https://github.com/gycrosskit/media/releases/tag/1.0.2)。13 个 publications 的公开元数据与字节核验、公开 OHOS 编译消费已完成；真实 imageThumbnail cinterop 使用独立 `media-cinterop-ohosarm64` 模块，由 core 正常传递依赖，保留两个真实 KLIB。HarmonyOS HAR/OHPM 为 **1.0.3**（`har-1.0.3`），iOS Git Pod 为 `1.0.2`（`native-1.0.2`）；发布与精确消费状态见对应 Release，旧版本 Tag/归档保留，真机行为另验。
+> 上一发行基线：Maven **1.0.2** 已发布：[Release](https://github.com/gycrosskit/media/releases/tag/1.0.2)。13 个 publications 的公开元数据与字节核验、公开 OHOS 编译消费已完成；真实 imageThumbnail cinterop 使用独立 `media-cinterop-ohosarm64` 模块，由 core 正常传递依赖，保留两个真实 KLIB。HarmonyOS HAR/OHPM 为 **1.0.3**（`har-1.0.3`），iOS Git Pod 为 `1.0.2`（`native-1.0.2`）；发布与精确消费状态见对应 Release，旧版本 Tag/归档保留，真机行为另验。
 
 组件构建最低基线为 Kuikly 2.29.1；允许范围、宿主选择及 2.30 消费边界见[功能与平台差异](docs/功能与平台差异.md#kuikly-版本与宿主选择)。各渠道与带日期的历史验收范围分别记录。
 
@@ -135,19 +137,19 @@ Kuikly group 固定从腾讯 Maven 读取 metadata 和实际产物，避免其�
 
 ```kotlin
 commonMain.dependencies {
-    implementation("com.github.gycrosskit.media:media-core:1.0.2")
+    implementation("com.github.gycrosskit.media:media-core:1.1.0")
 }
 ohosArm64Main.dependencies {
-    implementation("com.github.gycrosskit.media:media-kuikly:1.0.2")
+    implementation("com.github.gycrosskit.media:media-kuikly:1.1.0")
 }
 ```
 
-iOS 在 Xcode 的 Package Dependencies 添加 `https://github.com/gycrosskit/media.git`，选择精确 revision/tag `native-0.1.4`，产品 `GycMedia`（该历史基线已有精确远程 iOS SDK 编译与链接记录；更早版本为 `0.1.2`）。KMP 不自动导入该 Swift Package，桥接步骤见接入指南。
+SPM 在 Xcode 的 Package Dependencies 使用 `https://github.com/gycrosskit/media.git`，产品 `GycMedia`，固定精确 tag `native-1.1.0`。KMP 不自动导入该 Swift Package，桥接步骤见接入指南。
 
-HarmonyOS 原生包独立安装，HAR/OHPM 为 `1.0.3`，发布与精确 Registry 消费状态见对应 Release；历史固定 [0.1.6 Release HAR](https://github.com/gycrosskit/media/releases/tag/0.1.6) 消费分别验收，实际状态见顶部版本发布记录：
+HarmonyOS 原生包使用 `1.1.0`（`har-1.1.0`），从配置的私有 OHPM 使用精确版本。历史 Release HAR 与 Registry 消费记录保留原版本：
 
 ```sh
-ohpm install @gycrosskit/media@1.0.3
+ohpm install @gycrosskit/media@1.1.0
 ```
 
 ## 最小使用
