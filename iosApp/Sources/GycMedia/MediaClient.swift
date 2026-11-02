@@ -4,6 +4,9 @@ import PhotosUI
 import UIKit
 import UniformTypeIdentifiers
 import ImageIO
+import os.log
+
+enum CaptureImageFileError: Error { case encoding, writing }
 
 /** 系统图片选择、拍照与相册写入；单次 Picker 的回调由请求 ID 隔离。 */
 public final class MediaClient: NSObject {
@@ -17,11 +20,17 @@ public final class MediaClient: NSObject {
     public var presenterResolver: (() -> UIViewController?)?
 
     private struct PickerRequest {
-        let id = UUID()
-        let callback: MediaPickerCallback
+        let id: UUID
+        let callback: MediaPickerCallback?
         let compression: ImageSelectionPolicy?
+        var fileRequest: MediaFilePickerRequest? = nil
+        var fileCompletion: ((MediaFilePickerResult) -> Void)? = nil
+        var presenter: UIViewController? = nil
+        var ownedFiles: [URL] = []
     }
 
+    private var deliveredFiles: [UUID: [URL]] = [:]
+    private var fileExport: AVAssetExportSession?
     private var pickerRequest: PickerRequest?
     private var latestPickerRequestId: UUID?
     private var pickerController: UIViewController?
@@ -51,42 +60,15 @@ public final class MediaClient: NSObject {
                 callback.onFailed(message: "Invalid media request")
                 return
             }
-            let request = PickerRequest(
-                callback: callback,
-                compression: maxDimension > 0 && jpegQuality > 0
-                    ? ImageSelectionPolicy(
-                        maxDimension: CGFloat(maxDimension),
-                        quality: CGFloat(jpegQuality) / 100.0
-                    )
-                    : nil
-            )
-            latestPickerRequestId = request.id
-            cancelImagePicker()
-            // 旧终态回调可能同步发起新请求；重入的新请求拥有展示权。
-            guard latestPickerRequestId == request.id else {
-                callback.onCancelled()
-                return
-            }
-            pickerRequest = request
-            pendingPresentation = { [weak self] in
-                guard let self, self.pickerRequest?.id == request.id else { return }
-                if source == 0 {
-                    guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-                        self.finishPicker(error: "当前设备不支持相机")
-                        return
-                    }
-                    self.requestCameraAccess(requestId: request.id)
-                    return
-                }
-                var configuration = PHPickerConfiguration(photoLibrary: .shared())
-                configuration.filter = .images
-                configuration.selectionLimit = max(1, Int(maxCount))
-                configuration.preferredAssetRepresentationMode = .current
-                let picker = PHPickerViewController(configuration: configuration)
-                picker.delegate = self
-                self.presentPicker(picker, requestId: request.id)
-            }
-            presentPendingPickerIfReady()
+            var options = MediaFilePickerRequest(acceptTypes: ["image/*"], multiple: source == 1 && maxCount > 1, capture: source == 0, maxFiles: Int(maxCount), maxBytes: Self.maxBytes)
+            options.prefersCurrentRepresentation = true
+            options.maxTotalBytes = Self.maxBytes
+            options.captureJPEGQuality = 1
+            var request = PickerRequest(id: UUID(), callback: callback,
+                compression: maxDimension > 0 && jpegQuality > 0 ? ImageSelectionPolicy(maxDimension: CGFloat(maxDimension), quality: CGFloat(jpegQuality) / 100) : nil)
+            request.fileRequest = options
+            self.beginFileSelection(request)
+
         }
     }
 
@@ -100,7 +82,9 @@ public final class MediaClient: NSObject {
     private func presentPicker(_ picker: UIViewController, requestId: UUID, canRetry: Bool = true) {
         guard pickerRequest?.id == requestId else { return }
         let presenter: UIViewController?
-        if let resolver = presenterResolver {
+        if let requested = pickerRequest?.presenter {
+            presenter = UIKitPresentationContext.topViewController(from: requested)
+        } else if let resolver = presenterResolver {
             presenter = UIKitPresentationContext.topViewController(from: resolver())
         } else {
             presenter = UIKitPresentationContext.topViewController()
@@ -135,10 +119,15 @@ public final class MediaClient: NSObject {
         }
     }
 
-    /// 取消当前系统 Picker 并清空所有请求状态；重复调用保持幂等。
+    /// 旧图片桥没有 request ID，迟到 dispose 只能取消图片请求，不能撤销新的文件选择。
     public func cancelImagePicker() {
-        finishPicker { callback in callback.onCancelled() }
+        UIKitExecutionContext.run { [weak self] in
+            guard let self, self.pickerRequest?.callback != nil else { return }
+            self.cancelCurrentPicker()
+        }
     }
+
+    private func cancelCurrentPicker() { finishFilePicker(.cancelled) }
 
     /// 按 Photos 的仅添加权限写入系统相册，不读取用户已有照片。
     public func saveImage(data: Data, fileNamePrefix: String, callback: MediaSaveCallback) {
@@ -200,29 +189,27 @@ public final class MediaClient: NSObject {
     }
 
     /// 区分本次刚拒绝与此前已阻止；只有后者允许 shared 展示设置页恢复入口。
-    private func denyPickerPermission(blocked: Bool = false, restricted: Bool = false) {
-        finishPicker { callback in
-            if restricted {
-                callback.onPermissionRestricted()
-            } else if blocked {
-                callback.onPermissionBlocked()
-            } else {
-                callback.onPermissionDenied()
-            }
-        }
+    private func denyPickerPermission(blocked: Bool = false, restricted: Bool = false, permission: MediaCapturePermission = .camera) {
+        finishFilePicker(restricted ? .permissionRestricted(permission) : blocked ? .permissionBlocked(permission) : .permissionDenied(permission))
     }
 
-    /// dismiss 系统页面后发送唯一失败事件，并清空当前请求。
-    private func finishPicker(error: String) {
-        finishPicker { callback in callback.onFailed(message: error) }
-    }
+    private func finishPicker(error: String) { finishFilePicker(.failed(error)) }
 
     /// 结束当前请求并在清空状态后交付唯一终态回调。
     private func finishPicker(_ completion: @escaping (MediaPickerCallback) -> Void) {
+        finishRequest { request in if let callback = request.callback { completion(callback) } }
+    }
+
+    private func finishRequest(preserveFiles: Bool = false, _ completion: @escaping (PickerRequest) -> Void) {
         UIKitExecutionContext.run { [weak self] in
             guard let self, let request = pickerRequest else { return }
+            if !preserveFiles {
+                request.ownedFiles.forEach { try? FileManager.default.removeItem(at: $0) }
+                releaseFiles(token: request.id)
+            }
             imageReadProgress?.cancel()
             imageReadProgress = nil
+            fileExport?.cancelExport(); fileExport = nil
             let controller = pickerController
             pickerController = nil
             pickerRequest = nil
@@ -232,13 +219,13 @@ public final class MediaClient: NSObject {
                 let dismiss = {
                     UIKitPresentationContext.dismiss(controller, animated: true) {
                         self.isDismissingPicker = false
-                        completion(request.callback)
+                        completion(request)
                         self.presentPendingPickerIfReady()
                     }
                 }
                 if isPresentingPicker { pendingDismissal = dismiss } else { dismiss() }
             } else {
-                completion(request.callback)
+                completion(request)
             }
         }
     }
@@ -271,10 +258,15 @@ public final class MediaClient: NSObject {
 
     /// 授权回调必须匹配当前请求 ID，旧请求不能拉起新的相机页面。
     private func presentCamera(requestId: UUID) {
-        guard pickerRequest?.id == requestId else { return }
+        guard let request = pickerRequest, request.id == requestId else { return }
+        if let options = request.fileRequest, options.captureVideo, AVCaptureDevice.authorizationStatus(for: .audio) != .authorized {
+            requestAudioAccess(requestId: requestId)
+            return
+        }
         let picker = UIImagePickerController()
         picker.sourceType = .camera
-        picker.mediaTypes = [UTType.image.identifier]
+        picker.mediaTypes = request.fileRequest?.captureTypes ?? [UTType.image.identifier]
+        picker.videoMaximumDuration = 60
         picker.delegate = self
         presentPicker(picker, requestId: requestId)
     }
@@ -375,7 +367,7 @@ extension MediaClient: UIImagePickerControllerDelegate, UINavigationControllerDe
     /// 用户取消相机时以空结果正常完成，不伪装成读取失败。
     public func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         guard pickerController === picker else { return }
-        cancelImagePicker()
+        cancelCurrentPicker()
     }
 
     /// 优先读取系统提供的原始文件；拍照无 URL 时回退到 UIImage JPEG 数据。
@@ -384,51 +376,24 @@ extension MediaClient: UIImagePickerControllerDelegate, UINavigationControllerDe
         didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
     ) {
         guard pickerController === picker, let request = pickerRequest else { return }
-        let url = info[.imageURL] as? URL
-        let image = info[.originalImage] as? UIImage
-        DispatchQueue.global(qos: .userInitiated).async {
-            var exceedsLimit = false
-            let selected: SelectedImage?
+        guard let options = request.fileRequest else { return }
+        var retained: MediaSelectedFile?
+        if options.prefersCurrentRepresentation, let source = info[.imageURL] as? URL {
             do {
-                selected = try autoreleasepool { () throws -> SelectedImage? in
-                if let url {
-                    if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-                       size > Self.maxBytes { exceedsLimit = true; return nil }
-                    if let data = try? Data(contentsOf: url) {
-                        guard data.count <= Self.maxBytes else { exceedsLimit = true; return nil }
-                        if let type = UTType(filenameExtension: url.pathExtension),
-                           let selected = try ImageSelectionProcessor.selectedImage(
-                        data: data,
-                        suggestedName: url.lastPathComponent,
-                        typeIdentifier: type.identifier,
-                        policy: request.compression
-                           ) { return selected }
-                    }
-                }
-                guard let data = image?.jpegData(compressionQuality: 1) else { return nil }
-                guard data.count <= Self.maxBytes else { exceedsLimit = true; return nil }
-                return try ImageSelectionProcessor.selectedImage(
-                    data: data,
-                    suggestedName: nil,
-                    typeIdentifier: UTType.jpeg.identifier,
-                    policy: request.compression
-                )
-                }
-            } catch ImageSelectionError.tooLarge {
-                exceedsLimit = true
-                selected = nil
-            } catch { selected = nil }
-            UIKitExecutionContext.run {
-                guard self.pickerRequest?.id == request.id, self.pickerController === picker else { return }
-                if exceedsLimit {
-                    self.finishPicker(error: Self.limitExceededMessage)
-                } else if let selected {
-                    self.completePicker([selected])
-                } else {
-                    self.finishPicker(error: "无法读取拍摄的图片")
-                }
-            }
+                retained = try Self.copySelectedFile(source, suggestedName: nil, options: options)
+            } catch ImageSelectionError.tooLarge { finishPicker(error: Self.limitExceededMessage); return }
+            catch { /* 旧图片 API 在原始 URL 不可读时仍允许 UIImage 编码回退。 */ }
         }
+        if info[.mediaType] as? String == UTType.movie.identifier {
+            guard let source = info[.mediaURL] as? URL else { finishPicker(error: "Invalid captured movie"); return }
+            do {
+                retained = try Self.copySelectedFile(source, suggestedName: nil, options: MediaFilePickerRequest(acceptTypes: ["video/*"], multiple: false, capture: true, maxBytes: options.maxBytes))
+            } catch { finishPicker(error: Self.captureFailureMessage(error, legacyImage: request.callback != nil)); return }
+        }
+        if let retained { pickerRequest?.ownedFiles.append(retained.url) }
+        let retainedFile = retained
+        dismissFilePickerBeforeReading(requestId: request.id) { self.readCapturedFile(info, retained: retainedFile, request: request) }
+
     }
 }
 
@@ -436,16 +401,136 @@ extension MediaClient: PHPickerViewControllerDelegate {
     /// Read one provider at a time; a cancelled/replaced request cannot start another file.
     public func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
         guard pickerController === picker, let request = pickerRequest else { return }
-        guard !results.isEmpty else { cancelImagePicker(); return }
-        imageReadProgress?.cancel()
-        imageReadProgress = ImageSelectionProcessor.readImages(
-            results.map(\.itemProvider), policy: request.compression,
-            isActive: { [weak self, weak picker] in
-                guard let self, let picker else { return false }
-                return self.pickerRequest?.id == request.id && self.pickerController === picker
-            }
-        ) { [weak self] result in
+        guard !results.isEmpty else { cancelCurrentPicker(); return }
+        finishPhotoFileSelection(picker, providers: results.map(\.itemProvider))
+    }
+}
+
+extension MediaClient {
+    /// 与旧选图共用一个系统 Picker owner；取消句柄仅结束所属请求。
+    @discardableResult
+    public func pickFiles(_ options: MediaFilePickerRequest, presenter: UIViewController?, completion: @escaping (MediaFilePickerResult) -> Void) -> UUID {
+        let id = UUID()
+        UIKitExecutionContext.run { [weak self] in
             guard let self else { return }
+            var request = PickerRequest(id: id, callback: nil, compression: nil)
+            request.fileRequest = options; request.fileCompletion = completion; request.presenter = presenter
+            self.beginFileSelection(request)
+
+        }
+        return id
+    }
+
+    private func tracePicker(_ branch: String, options: MediaFilePickerRequest) {
+#if DEBUG
+        let types = options.types
+        os_log("[MediaFileSelection] branch=%{public}@ empty=%{public}d image=%{public}d video=%{public}d document=%{public}d unknown=%{public}d", log: .default, type: .info, branch as NSString,
+              options.acceptTypes.flatMap { $0.components(separatedBy: ",") }.allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ? 1 : 0, options.selectionTypes.filter { $0.conforms(to: .image) }.count,
+              options.selectionTypes.filter { $0.conforms(to: .movie) }.count,
+              types.filter { !$0.conforms(to: .image) && !$0.conforms(to: .movie) && !$0.isDynamic }.count,
+              types.filter { $0.isDynamic }.count)
+#endif
+    }
+
+    private func beginFileSelection(_ request: PickerRequest) {
+        guard let options = request.fileRequest, options.maxFiles > 0, options.maxFiles <= 500, options.maxBytes > 0,
+              options.maxBytes <= 50 * 1024 * 1024, options.acceptTypes.count <= 32 else {
+            request.callback?.onFailed(message: "Invalid file selection request"); request.fileCompletion?(.failed("Invalid file selection request")); return
+        }
+        let id = request.id
+        latestPickerRequestId = id
+        cancelCurrentPicker()
+        guard latestPickerRequestId == id else { request.callback?.onCancelled(); request.fileCompletion?(.cancelled); return }
+        pickerRequest = request
+        pendingPresentation = { [weak self] in
+            guard let self, self.pickerRequest?.id == id else { return }
+            if options.capture {
+                self.tracePicker("camera", options: options)
+                guard options.captureImage != options.captureVideo, UIImagePickerController.isSourceTypeAvailable(.camera),
+                      options.captureTypes.allSatisfy({ UIImagePickerController.availableMediaTypes(for: .camera)?.contains($0) == true }),
+                      Bundle.main.object(forInfoDictionaryKey: "NSCameraUsageDescription") != nil,
+                      !options.captureVideo || Bundle.main.object(forInfoDictionaryKey: "NSMicrophoneUsageDescription") != nil else { self.finishPicker(error: "Camera capture unavailable"); return }
+                if options.captureVideo {
+                    switch AVCaptureDevice.authorizationStatus(for: .audio) {
+                    case .denied: self.denyPickerPermission(blocked: true, permission: .microphone); return
+                    case .restricted: self.denyPickerPermission(restricted: true, permission: .microphone); return
+                    default: break
+                    }
+                }
+                self.requestCameraAccess(requestId: id)
+            } else if options.mediaOnly {
+                self.tracePicker(options.image && options.video ? "PhotosUI.mixed" : options.image ? "PhotosUI.images" : "PhotosUI.videos", options: options)
+                var configuration = PHPickerConfiguration()
+                configuration.filter = options.image && options.video ? .any(of: [.images, .videos]) : options.image ? .images : .videos
+                configuration.selectionLimit = options.multiple ? options.maxFiles : 1
+                configuration.preferredAssetRepresentationMode = options.prefersCurrentRepresentation ? .current : .compatible
+                let picker = PHPickerViewController(configuration: configuration); picker.delegate = self
+                self.presentPicker(picker, requestId: id)
+            } else {
+                self.tracePicker("DocumentPicker", options: options)
+                let picker = UIDocumentPickerViewController(forOpeningContentTypes: options.types, asCopy: true)
+                picker.allowsMultipleSelection = options.multiple; picker.delegate = self
+                self.presentPicker(picker, requestId: id)
+            }
+        }
+        presentPendingPickerIfReady()
+    }
+
+    public func cancelFiles(requestId: UUID) {
+        UIKitExecutionContext.run { [weak self] in
+            guard self?.pickerRequest?.id == requestId else { return }
+            self?.cancelCurrentPicker()
+        }
+    }
+
+    public func releaseFiles(token: UUID) {
+        UIKitExecutionContext.run { [weak self] in
+            self?.deliveredFiles.removeValue(forKey: token)?.forEach { try? FileManager.default.removeItem(at: $0) }
+        }
+    }
+
+    private func finishFilePicker(_ result: MediaFilePickerResult) {
+        let preserve: Bool
+        if case .selected = result { preserve = true } else { preserve = false }
+        finishRequest(preserveFiles: preserve) { request in
+            if let callback = request.callback {
+                switch result {
+                case .cancelled: callback.onCancelled()
+                case .permissionDenied: callback.onPermissionDenied()
+                case .permissionBlocked: callback.onPermissionBlocked()
+                case .permissionRestricted: callback.onPermissionRestricted()
+                case .failed(let message): callback.onFailed(message: message)
+                case .selected: preconditionFailure("Legacy bytes must adapt the selected lease before completion")
+                }
+            } else { request.fileCompletion?(result) }
+        }
+    }
+
+    private func completeFilePicker(_ files: [MediaSelectedFile], requestId: UUID) {
+        guard pickerRequest?.id == requestId else { return }
+        let selected = files.map(\.url)
+        pickerRequest?.ownedFiles.filter { !selected.contains($0) }.forEach { try? FileManager.default.removeItem(at: $0) }
+        pickerRequest?.ownedFiles = selected
+        deliveredFiles[requestId] = selected
+        if let request = pickerRequest, request.callback != nil {
+            pickerRequest?.ownedFiles = []
+            adaptSelectedImages(files, request: request)
+        } else { finishFilePicker(.selected(token: requestId, files: files)) }
+    }
+
+    /// 旧图片 API 仅适配同一次原始文件选择结果；取消、lease 和原生 UI 都复用文件流程。
+    private func adaptSelectedImages(_ files: [MediaSelectedFile], request: PickerRequest) {
+        guard !files.isEmpty else { finishPicker(error: "无法读取所选图片"); return }
+        let providers = files.map { file -> NSItemProvider in
+            let provider = NSItemProvider()
+            provider.suggestedName = file.fileName
+            let type = UTType(mimeType: file.contentType) ?? UTType(filenameExtension: file.url.pathExtension) ?? .image
+            provider.registerFileRepresentation(forTypeIdentifier: type.identifier, fileOptions: [], visibility: .ownProcess) { completion in completion(file.url, false, nil); return nil }
+            return provider
+        }
+        imageReadProgress = ImageSelectionProcessor.readImages(providers, policy: request.compression,
+            isActive: { [weak self] in self?.pickerRequest?.id == request.id }) { [weak self] result in
+            guard let self, self.pickerRequest?.id == request.id else { return }
             switch result {
             case .failure(.tooLarge): self.finishPicker(error: Self.limitExceededMessage)
             case .success(let images):
@@ -453,5 +538,205 @@ extension MediaClient: PHPickerViewControllerDelegate {
                 else { self.completePicker(images) }
             }
         }
+    }
+
+    private func requestAudioAccess(requestId: UUID) {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: presentCamera(requestId: requestId)
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+                UIKitExecutionContext.run {
+                    guard let self, self.pickerRequest?.id == requestId else { return }
+                    if granted { self.presentCamera(requestId: requestId) }
+                    else { self.denyPickerPermission(permission: .microphone) }
+                }
+            }
+        case .denied: denyPickerPermission(blocked: true, permission: .microphone)
+        case .restricted: denyPickerPermission(restricted: true, permission: .microphone)
+        @unknown default: finishPicker(error: "Unknown microphone permission")
+        }
+    }
+
+    private func dismissFilePickerBeforeReading(requestId: UUID, read: @escaping () -> Void) {
+        guard pickerRequest?.id == requestId else { return }
+        let controller = pickerController; pickerController = nil
+        guard let controller else { return }
+        isDismissingPicker = true
+        let dismiss = { [weak self] in
+            UIKitPresentationContext.dismiss(controller, animated: true) {
+                guard let self else { return }
+                self.isDismissingPicker = false
+                if self.pickerRequest?.id == requestId { read() }
+                self.presentPendingPickerIfReady()
+            }
+        }
+        if isPresentingPicker { pendingDismissal = dismiss } else { dismiss() }
+    }
+
+    private static func selectedFileMetadata(_ source: URL, suggestedName: String?, options: MediaFilePickerRequest, remainingBytes: Int? = nil) throws -> MediaSelectedFile {
+        var current = source
+        current.removeAllCachedResourceValues()
+        let values = try current.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey, .contentTypeKey])
+        let limit = min(options.maxBytes, remainingBytes ?? options.maxBytes)
+        if let size = values.fileSize, size > limit { throw ImageSelectionError.tooLarge }
+        guard source.isFileURL, values.isRegularFile == true, let size = values.fileSize, size > 0,
+              options.accepts(values.contentType ?? UTType(filenameExtension: source.pathExtension) ?? .data) else { throw CocoaError(.fileReadCorruptFile) }
+        let type = values.contentType ?? UTType(filenameExtension: source.pathExtension) ?? .data
+        return MediaSelectedFile(url: source, fileName: suggestedName ?? source.lastPathComponent, contentType: type.preferredMIMEType ?? "application/octet-stream", size: size)
+    }
+
+    private static func copySelectedFile(_ source: URL, suggestedName: String?, options: MediaFilePickerRequest, remainingBytes: Int? = nil) throws -> MediaSelectedFile {
+        let original = try selectedFileMetadata(source, suggestedName: suggestedName, options: options, remainingBytes: remainingBytes)
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let target = source.pathExtension.isEmpty ? base : base.appendingPathExtension(source.pathExtension)
+        do {
+            try FileManager.default.copyItem(at: source, to: target)
+            return try selectedFileMetadata(target, suggestedName: original.fileName, options: options, remainingBytes: remainingBytes)
+        } catch { try? FileManager.default.removeItem(at: target); throw error }
+    }
+
+    // PHPickerResult 没有公开构造入口；单独保留系统结果到 provider 的薄边界供真实 IO 回归。
+    func finishPhotoFileSelection(_ picker: PHPickerViewController, providers: [NSItemProvider]) {
+        guard pickerController === picker, let request = pickerRequest, request.fileRequest != nil else { return }
+        guard !providers.isEmpty else { cancelCurrentPicker(); return }
+        dismissFilePickerBeforeReading(requestId: request.id) { self.readFileProviders(providers, requestId: request.id, files: []) }
+    }
+
+    private func readFileProviders(_ providers: [NSItemProvider], requestId: UUID, files: [MediaSelectedFile]) {
+        guard let request = pickerRequest, request.id == requestId, let options = request.fileRequest else { return }
+        guard providers.count + files.count <= (options.multiple ? options.maxFiles : 1) else { finishPicker(error: "Too many selected files"); return }
+        guard let provider = providers.first else { completeFilePicker(files, requestId: requestId); return }
+        guard let type = provider.registeredTypeIdentifiers.first(where: { id in
+            guard let type = UTType(id) else { return false }
+            return (type.conforms(to: .image) || type.conforms(to: .movie)) && options.accepts(type)
+        }) else {
+            if request.callback != nil { readFileProviders(Array(providers.dropFirst()), requestId: requestId, files: files) }
+            else { finishPicker(error: "Unsupported selected media format") }
+            return
+        }
+        let remaining = Array(providers.dropFirst())
+        let budget = options.maxTotalBytes.map { $0 - files.reduce(0) { $0 + $1.size } }
+        imageReadProgress = provider.loadFileRepresentation(forTypeIdentifier: type) { [weak self] url, error in
+            // Provider 的临时 URL 在回调返回后失效，复制必须在此完成。
+            var copied: MediaSelectedFile?
+            var tooLarge = false
+            do { if error == nil, let url { copied = try Self.copySelectedFile(url, suggestedName: provider.suggestedName, options: options, remainingBytes: budget) } }
+            catch ImageSelectionError.tooLarge { tooLarge = true }
+            catch {}
+            UIKitExecutionContext.run {
+                guard let self, self.pickerRequest?.id == requestId else { if let copied { try? FileManager.default.removeItem(at: copied.url) }; return }
+                self.imageReadProgress = nil
+                if tooLarge { self.finishPicker(error: request.callback != nil ? Self.limitExceededMessage : "File exceeds selection size limit"); return }
+                guard let copied else {
+                    if request.callback != nil { self.readFileProviders(remaining, requestId: requestId, files: files) }
+                    else { self.finishPicker(error: "Unable to read selected media") }
+                    return
+                }
+                self.pickerRequest?.ownedFiles.append(copied.url)
+                self.readFileProviders(remaining, requestId: requestId, files: files + [copied])
+            }
+        }
+    }
+
+    private func readDocumentFiles(_ urls: [URL], requestId: UUID) {
+        guard let request = pickerRequest, request.id == requestId, let options = request.fileRequest else { return }
+        guard !urls.isEmpty, urls.count <= (options.multiple ? options.maxFiles : 1) else { finishPicker(error: "Invalid selected files"); return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            var files: [MediaSelectedFile] = []
+            do {
+                for url in urls {
+                    let scoped = url.startAccessingSecurityScopedResource()
+                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                    files.append(try Self.copySelectedFile(url, suggestedName: nil, options: options))
+                }
+            } catch { files.forEach { try? FileManager.default.removeItem(at: $0.url) }; files = [] }
+            UIKitExecutionContext.run {
+                guard self.pickerRequest?.id == requestId else { files.forEach { try? FileManager.default.removeItem(at: $0.url) }; return }
+                guard !files.isEmpty else { self.finishPicker(error: "Unable to read selected files"); return }
+                self.pickerRequest?.ownedFiles.append(contentsOf: files.map(\.url))
+                self.completeFilePicker(files, requestId: requestId)
+            }
+        }
+    }
+
+    private static func captureFailureMessage(_ error: Error, legacyImage: Bool) -> String {
+        if case ImageSelectionError.tooLarge = error { return legacyImage ? limitExceededMessage : "File exceeds selection size limit" }
+        if case CaptureImageFileError.encoding = error { return "Unable to encode captured image" }
+        if case CaptureImageFileError.writing = error { return "Unable to write captured image" }
+        return "Invalid captured file output"
+    }
+
+    /// 只写入新编码的拍摄结果；已保全的 URL 直接复核 metadata，不再复制一次。
+    static func writeCapturedImage(_ image: UIImage, options: MediaFilePickerRequest, to target: URL) throws -> MediaSelectedFile {
+        let jpeg = options.accepts(.jpeg)
+        guard let data = jpeg ? image.jpegData(compressionQuality: options.captureJPEGQuality) : image.pngData(), !data.isEmpty else { throw CaptureImageFileError.encoding }
+        guard data.count <= options.maxBytes else { throw ImageSelectionError.tooLarge }
+        do {
+            do { try data.write(to: target, options: .atomic) } catch { throw CaptureImageFileError.writing }
+            return try selectedFileMetadata(target, suggestedName: nil, options: options)
+        } catch { try? FileManager.default.removeItem(at: target); throw error }
+    }
+
+    private func readCapturedFile(_ info: [UIImagePickerController.InfoKey: Any], retained: MediaSelectedFile?, request: PickerRequest) {
+        guard pickerRequest?.id == request.id, let options = request.fileRequest else { return }
+        if let retained {
+            // 保持 MP4-only 的 AVFoundation 验真/转码合同，不凭扩展名绕过原解析路径。
+            if info[.mediaType] as? String == UTType.movie.identifier && !options.accepts(.quickTimeMovie) && options.accepts(.mpeg4Movie) {
+                exportCapturedFile(retained.url, request: request)
+                return
+            }
+            let type = UTType(mimeType: retained.contentType) ?? UTType(filenameExtension: retained.url.pathExtension) ?? .data
+            if options.accepts(type) {
+                do {
+                    let file = try Self.selectedFileMetadata(retained.url, suggestedName: retained.fileName, options: options)
+                    completeFilePicker([file], requestId: request.id)
+                } catch { finishPicker(error: Self.captureFailureMessage(error, legacyImage: request.callback != nil)) }
+            } else { finishPicker(error: "Unsupported captured file format") }
+            return
+        }
+        guard info[.mediaType] as? String == UTType.image.identifier, let image = info[.originalImage] as? UIImage else { finishPicker(error: "Invalid captured image"); return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let target = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension(options.accepts(.jpeg) ? "jpg" : "png")
+            let result = Result { try Self.writeCapturedImage(image, options: options, to: target) }
+            UIKitExecutionContext.run {
+                guard self.pickerRequest?.id == request.id else { try? FileManager.default.removeItem(at: target); return }
+                switch result {
+                case .success(let file):
+                    self.pickerRequest?.ownedFiles.append(file.url)
+                    self.completeFilePicker([file], requestId: request.id)
+                case .failure(let error): self.finishPicker(error: Self.captureFailureMessage(error, legacyImage: request.callback != nil))
+                }
+            }
+        }
+    }
+
+    private func exportCapturedFile(_ source: URL, request: PickerRequest) {
+        guard let options = request.fileRequest, let size = try? source.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 0, size <= options.maxBytes,
+              let export = AVAssetExportSession(asset: AVURLAsset(url: source), presetName: AVAssetExportPresetHighestQuality), export.supportedFileTypes.contains(.mp4) else { finishPicker(error: "Unable to export captured movie"); return }
+        let target = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("mp4")
+        pickerRequest?.ownedFiles.append(target); fileExport = export
+        export.outputURL = target; export.outputFileType = .mp4
+        export.exportAsynchronously { [weak self] in
+            UIKitExecutionContext.run {
+                guard let self, self.pickerRequest?.id == request.id else { try? FileManager.default.removeItem(at: target); return }
+                guard export.status == .completed else { try? FileManager.default.removeItem(at: target); self.finishPicker(error: "Unable to export captured movie"); return }
+                self.fileExport = nil
+                do {
+                    let file = try Self.selectedFileMetadata(target, suggestedName: nil, options: options)
+                    self.completeFilePicker([file], requestId: request.id)
+                } catch { self.finishPicker(error: Self.captureFailureMessage(error, legacyImage: request.callback != nil)) }
+            }
+        }
+    }
+}
+
+extension MediaClient: UIDocumentPickerDelegate {
+    public func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard pickerController === controller, let request = pickerRequest, request.fileRequest != nil else { return }
+        dismissFilePickerBeforeReading(requestId: request.id) { self.readDocumentFiles(urls, requestId: request.id) }
+    }
+    public func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        guard pickerController === controller else { return }
+        cancelCurrentPicker()
     }
 }

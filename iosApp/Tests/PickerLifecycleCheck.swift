@@ -273,6 +273,7 @@ private func runChecks(window: UIWindow) async {
     MediaClient.shared.presenterResolver = nil
     print("PHASE: Image loading")
     await checkImageLoading()
+    await checkFilePicker(window: window)
     print("PASS: Picker ownership, cancellation, UIKit transitions and presenter containers")
 }
 
