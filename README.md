@@ -1,6 +1,8 @@
 # GY CrossKit Media
 
-> 版本 `1.1.0`：Maven、Swift Package `GycMedia`（`native-1.1.0`）与私有 OHPM/HAR（`har-1.1.0`）。各渠道发布与精确远程消费状态以对应 Release 为准，设备验收单独记录。
+新版 Maven 发布由 Jenkins 生成同版本归档、`source-receipt.json` 和 `SHA256SUMS`。JitPack 核对标签来源、归档尺寸和摘要后安装同一份制品。历史发布按原版本 Tag 复验。
+
+> 版本 `1.1.0`：Maven、Swift Package `GycMedia`（`native-1.1.0`）与私有 OHPM（`1.1.0`）。各渠道发布与精确远程消费状态以对应 Release 为准，设备验收单独记录。
 
 Kuikly 由宿主统一选择版本；组件构建基线、允许范围及消费验证边界见[功能与平台差异](docs/功能与平台差异.md#kuikly-版本与宿主选择)。
 
@@ -146,7 +148,7 @@ ohosArm64Main.dependencies {
 
 SPM 在 Xcode 的 Package Dependencies 使用 `https://github.com/gycrosskit/media.git`，产品 `GycMedia`，固定精确 tag `native-1.1.0`。KMP 不自动导入该 Swift Package，桥接步骤见接入指南。
 
-HarmonyOS 原生包使用 `1.1.0`（`har-1.1.0`），从配置的私有 OHPM 使用精确版本。历史 Release HAR 与 Registry 消费记录保留原版本：
+HarmonyOS 原生包从私有 OHPM 安装精确版本 `1.1.0`：
 
 ```sh
 ohpm install @gycrosskit/media@1.1.0
