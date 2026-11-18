@@ -1,10 +1,10 @@
 # @gycrosskit/media
 
-> 版本 `1.1.0`：Maven、Swift Package `GycMedia`（`native-1.1.0`）与私有 OHPM/HAR（`har-1.1.0`）。各渠道发布与精确远程消费状态以对应 Release 为准，设备验收单独记录。
+> 版本 `1.1.0`：Maven、Swift Package `GycMedia`（`native-1.1.0`）与私有 OHPM `1.1.0`。各渠道发布与精确远程消费状态以对应发布回执为准，设备验收单独记录。
 
 历史 `0.1.7` 记录：该轮 Maven `0.1.7` 复用已发布 HAR `0.1.6` 的原字节。完整功能与五入口限制见[功能与平台差异](https://github.com/gycrosskit/media/blob/0.1.7/docs/功能与平台差异.md)；本版发布记录见[Release](https://github.com/gycrosskit/media/releases/tag/0.1.7)。该轮 README 文档更新未重新发布或修改当时的既有 HAR。
 
-HAR `0.1.6` 已发布；Registry 精确安装与固定 Release HAR 消费分别验收，不以一个渠道代替另一个。
+当前从私有 OHPM 安装精确版本，并以对应 Jenkins 回执核验包字节。
 
 系统选图、拍照、可选 JPEG 压缩和相册保存的 Kuikly Module。当前 HAR target/compatible SDK 为 HarmonyOS API 22。
 
