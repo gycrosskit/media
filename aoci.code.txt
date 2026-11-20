@@ -1,0 +1,223 @@
+#AOCI-CODE-VOLUME: 1
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/===
+.gitattributes[FC3T]: F:规范文本检出为 LF，使 AOCI 字节基线跨平台可重现 | R:- | A:- | S:-
+.gitignore[FC3T]: F:排除本地构建和 OHOS 缓存、HAR、Jenkins 诊断与本机 MCP | R:- | A:- | S:-
+AGENTS.md[SG6S]: F:记录媒体组件评审边界和 AOCI 认知维护流程 | R:code:README.md | A:aoci_rules,aoci_overview,aoci_maintain | S:关注 Picker owner、新旧请求隔离、主线程与 IO、暂存文件清理及输入输出限额
+CHANGELOG.md[SV4T]: F:按各渠道保存媒体组件版本变更及旧发布情况 | R:code:README.md,code:docs/功能与平台差异.md | A:- | S:-
+GycMediaKuikly.podspec[FV6T]: F:声明独立 iOS CocoaPods Kuikly 接收端及 Renderer 版本范围 | R:code:Package.swift,code:README.md | A:GycMediaKuikly/Kuikly | S:从 native 版本标签解析，iOS 14 起步；pod 不声明 Swift 基础产品
+LICENSE[SS2M]: F:提供自有媒体源码的 Apache 2.0 分发许可 | R:- | A:- | S:-
+Package.swift[FV5T]: F:提供 iOS 14+ Swift Package 基础媒体库 GycMedia | R:code:GycMediaKuikly.podspec,code:iosApp/KmpMediaBridge.swift | A:GycMedia | S:-
+README.md[SG7S]: F:提供媒体原始文件和图像能力入口、三端宿主接线、安装坐标与验证导航 | R:code:docs/功能与平台差异.md,code:docs/接入指南.md,code:CHANGELOG.md | A:ImagePickerPlatform,ImageSavePlatform | S:宿主管理文件租约与上传；原生系统 Picker 由平台退出
+VALIDATION.md[SV4T]: F:保存 0.1.1 Picker 和 0.1.2 构建、制品与远程消费证据 | R:code:README.md,code:docs/开发与验证.md | A:- | S:-
+build.gradle.kts[FV5T]: F:统一 KMP/Android 插件和 Maven 发布坐标、版本及许可 | R:code:gradle/libs.versions.toml,code:media-core/build.gradle.kts,code:media-kuikly/build.gradle.kts | A:GROUP,VERSION | S:-
+gradle.properties[FV3T]: F:配置 Gradle 堆、UTF-8、AndroidX 与非传递 R | R:- | A:- | S:-
+gradlew[XV3S]: F:解析 POSIX 应用目录和 Java 环境，执行 Gradle Wrapper | R:code:gradle/wrapper/gradle-wrapper.properties | A:- | S:-
+gradlew.bat[XV3T]: F:解析 Windows Java、启动路径并执行 Gradle Wrapper | R:code:gradle/wrapper/gradle-wrapper.properties | A:- | S:-
+jitpack-install.sh[OV8T]: F:安装 GitHub Release 预构建 Maven 归档并核对 Tag、来源收据和字节摘要 | R:code:jitpack.yml,code:scripts/check-public-maven.py | A:source-receipt.json,SHA256SUMS | S:拒绝超限、无效路径和来源不匹配后才解包
+jitpack.yml[FV4T]: F:配置 JitPack JDK 与 media 预构建安装入口 | R:code:jitpack-install.sh | A:- | S:-
+release-pack.py[OV5T]: F:将已选版本的 Maven staging 打包并回读元数据 | R:code:scripts/package-maven.sh | A:plain_file | S:排除 AppleDouble 和旧版本目录
+settings.gradle.kts[FV5T]: F:声明原生 KMP 插件仓库、Kuikly 依赖镜像和两个生产模块 | R:code:media-core/build.gradle.kts,code:media-kuikly/build.gradle.kts | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/docs/===
+0.1.4远程发布验收.md[SV4T]: F:记录旧版 Android/iOS 主线程 owner 修复及 Maven 预发行、实际消费证明 | R:code:docs/功能与平台差异.md | A:- | S:-
+0.1.5发布验收.md[SV4T]: F:记录 0.1.5 的 Picker 修正、截断图像测试和精确渠道交付证据 | R:code:docs/完整源码审查.md | A:- | S:-
+功能与平台差异.md[SU7S]: F:记录原始文件选择、有界缩略图、旧图像 API 和三端能力矩阵 | R:code:README.md,code:docs/接入指南.md,code:docs/开发与验证.md | A:- | S:旧图像原图和输出各自32MiB；原始文件另有数量和逐文件限额，宿主按结果合同释放 lease
+发布验收-0.1.3.md[SV4T]: F:记录 0.1.3 HarmonyOS HAR 的制品摘要和独立安装编译，注明 OHPM 状态 | R:code:VALIDATION.md | A:- | S:-
+完整源码审查.md[SQ5S]: F:记录历史完整源码检查、格式边界修复、iOS/原生消费及验证范围 | R:code:docs/0.1.5发布验收.md,code:docs/功能与平台差异.md | A:- | S:-
+开发与验证.md[SV6T]: F:记录各平台编译、原始文件和媒体定向测试、原生渠道及独立消费命令 | R:code:scripts/build.sh,code:docs/功能与平台差异.md | A:- | S:-
+接入指南.md[SU7S]: F:说明三端 picker、文件 lease、Kuikly Native Module 及缩略图的宿主接线 | R:code:README.md,code:docs/功能与平台差异.md | A:- | S:宿主随结束或取消释放临时文件；业务方不能把临时 URI 当永久资产
+跨端行为候选.md[SU4T]: F:记录 0.1.6 各平台 dispose、图像限额、编码兼容及历史候选验收 | R:code:docs/功能与平台差异.md | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/gradle/===
+libs.versions.toml[FV4T]: F:集中声明 Kotlin、AGP 和 Kuikly core 的编译版本 | R:code:build.gradle.kts,code:media-kuikly/build.gradle.kts | A:- | S:-
+native-toolchain.properties[FV4T]: F:登记 Kotlin Native 工具链版本、四个发布 target 与修订号 | R:- | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/gradle/wrapper/===
+gradle-wrapper.properties[FV3T]: F:固定 Gradle 8.11.1 二进制分发及缓存路径 | R:code:gradlew,code:gradlew.bat | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/iosApp/Fixtures/===
+CreateMovie.swift[TU4T]: F:生成真实 16×16 H264 MOV 文件供 Swift 媒体回归测试 | R:- | A:- | S:15秒内完成写入并核验 AVAssetWriter 成功
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/iosApp/===
+KmpMediaBridge.swift[IU6T]: F:接宿主 KMP iOS 图片选择与保存回调到现有 GycMedia MediaClient | R:code:Package.swift | A:KmpMediaBridge | S:如宿主框架为 Shared 只调整 import；回调保留取消、授权和正常结果
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/iosApp/KuiklyTests/===
+ModuleLifecycleCheck.swift[TU6S]: F:在 UIKit fixture 验证 GycMedia receiver 的 context 回执与失效 | R:code:iosApp/Sources/GycMediaKuikly/GycMedia.swift | A:- | S:Main 阻塞时后台 invalidate 仍需完成
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/iosApp/Sources/GycMedia/===
+ImageSelectionProcessor.swift[IU8S]: F:按编码预算读取并可选 JPEG 压缩，保留原始格式和正确像素方向 | R:code:iosApp/Sources/GycMedia/MediaClient.swift | A:ImageSelectionProcessor | S:provider 临时文件在回调内读取；串行单文件，取消后不启动下一个
+MediaCallbacks.swift[LU6T]: F:声明 Swift 原生选图和保存的正常回执、取消及权限失败接口 | R:code:iosApp/Sources/GycMedia/MediaClient.swift,code:iosApp/KmpMediaBridge.swift | A:MediaPickerCallback,MediaSaveCallback | S:-
+MediaClient.swift[AU9L]: F:编排 iOS 原生文件/图像选择、相机、视频导出和 Photos 保存 | R:code:iosApp/Sources/GycMedia/MediaFilePicker.swift,code:iosApp/Sources/GycMedia/ImageSelectionProcessor.swift,code:iosApp/Sources/GycMedia/UIKitContext.swift | A:MediaClient.pickFiles,MediaClient.releaseFiles,MediaClient.pickImages,MediaClient.saveImage | S:旧图像适配同一文件选择 lease；转换按 request ID 与原始/输出预算隔离；转场后只展示最新 Picker
+MediaFilePicker.swift[LU7T]: F:定义 iOS 文件选择入参、媒体类型匹配、权限及带租约的文件回执 | R:code:iosApp/Sources/GycMedia/MediaClient.swift | A:MediaFilePickerRequest,MediaFilePickerResult,MediaSelectedFile | S:UI 可按媒体 family 选择；返回验证保持精确 accept，未知媒体子类型拒绝
+UIKitContext.swift[IU7T]: F:定位前台 Scene 的 presenter，并在 Main 安排独立 UIKit 转场清理 | R:code:iosApp/Sources/GycMedia/MediaClient.swift | A:UIKitExecutionContext,UIKitPresentationContext | S:等待旧控制器转场后只 dismiss 捕获对象，不从根去关闭后继 Picker
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/iosApp/Sources/GycMediaKuikly/===
+GycMedia.swift[IU8T]: F:把 iOS Renderer 的 GycMedia 请求交给每实例 Kotlin handler，在失效前回执 | R:code:GycMediaKuikly.podspec,code:iosApp/KuiklyTests/ModuleLifecycleCheck.swift | A:GycMedia.configure | S:用 SDK typed callback 和有效 root 门禁；失效不能反向同步等待 Main
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/iosApp/Tests/===
+FilePickerCheck.swift[TU6M]: F:在 Swift fixture 核对原始选择、MIME 别名、视频/文档和旧图像适配的 lease 生命周期 | R:code:iosApp/Sources/GycMedia/MediaFilePicker.swift,code:iosApp/Sources/GycMedia/MediaClient.swift | A:- | S:-
+ImageLoadingCheck.swift[TU6S]: F:验证 iOS 读取和压缩的图片预算、provider 串行及超限立即失败 | R:code:iosApp/Sources/GycMedia/ImageSelectionProcessor.swift | A:- | S:大稀疏文件在读内容前拒绝，第二文件按剩余总预算判断
+PickerLifecycleCheck.swift[TU6M]: F:验证 UIKit Picker 的取消、替换、展示转场和 Photos 保存格式拒绝 | R:code:iosApp/Sources/GycMedia/MediaClient.swift,code:iosApp/Sources/GycMedia/UIKitContext.swift | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-core/===
+build.gradle.kts[FV6T]: F:配置媒体核心的 Android/iOS/OHOS 发布变体、平台依赖及图像 cinterop | R:code:build.gradle.kts,code:media-kuikly/build.gradle.kts | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-core/src/androidMain/===
+AndroidManifest.xml[FV6T]: F:注册只授权临时 URI 的私有 Android FileProvider | R:code:media-core/src/androidMain/res/xml/gyc_media_paths.xml | A:- | S:authority 由宿主 applicationId 拼接，provider 不对外导出
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-core/src/androidMain/kotlin/io/github/gycrosskit/media/===
+AndroidBitmapSampling.kt[IU6T]: F:先读取图片尺寸，再用采样参数限制实际 Bitmap 解码尺寸 | R:code:media-core/src/androidMain/kotlin/io/github/gycrosskit/media/AndroidImagePickerPlatform.kt,code:media-core/src/androidMain/kotlin/io/github/gycrosskit/media/ImageThumbnail.android.kt | A:decodeSampledBitmap,calculateBitmapInSampleSize | S:-
+AndroidFilePicker.kt[IU9M]: F:管理 Android ActivityResult、相机输出文件、MIME 筛选和原始文件结果租约 | R:code:media-core/src/androidMain/kotlin/io/github/gycrosskit/media/AndroidImagePickerPlatform.kt,code:media-core/src/androidMain/AndroidManifest.xml | A:AndroidFilePicker.pick,AndroidFilePicker.dispose,AndroidFilePickerResult | S:逐请求隔离 launcher 和临时文件；迟回调清旧资源，释放后不再次接单
+AndroidImagePickerPlatform.kt[IU9M]: F:适配 Android 相册与相机结果为原始或压缩图像，做预算、采样及方向处理 | R:code:media-core/src/androidMain/kotlin/io/github/gycrosskit/media/AndroidFilePicker.kt,code:media-core/src/androidMain/kotlin/io/github/gycrosskit/media/AndroidBitmapSampling.kt | A:AndroidImagePickerPlatform,readImageBytes | S:新请求和取消在 Main 管理；数据读取切 IO；原始与输出编码分别限额
+AndroidImageSavePlatform.kt[IU8S]: F:验证图像编码后用 MediaStore 保存原字节并映射宿主权限结果 | R:code:media-core/src/commonMain/kotlin/io/github/gycrosskit/media/ImageSavePlatform.kt | A:AndroidImageSavePlatform.save | S:内容先在 IO 校验，旧 Android 才在 Main 申请权限；失败删除半成品，API29+ 发布清除 IS_PENDING
+ImageThumbnail.android.kt[IU6T]: F:在后台线程采样并编码满足输出预算的 Android 缩略图 | R:code:media-core/src/androidMain/kotlin/io/github/gycrosskit/media/AndroidBitmapSampling.kt | A:encodeImageThumbnail | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-core/src/androidMain/res/values-en/===
+strings.xml[FL3T]: F:提供 Android 组件错误提示英文资源 | R:- | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-core/src/androidMain/res/values/===
+strings.xml[FL3T]: F:提供 Android 组件默认提示文本 | R:- | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-core/src/androidMain/res/xml/===
+gyc_media_paths.xml[FS5T]: F:把 FileProvider 可共享的外部应用文件限制到 Pictures 和 Movies | R:code:media-core/src/androidMain/AndroidManifest.xml | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-core/src/androidUnitTest/kotlin/io/github/gycrosskit/media/===
+AndroidFilePickerTest.kt[TU6M]: F:验证 Android 系统/回退文件选择、MIME 识别、多选和相机 lease 隔离 | R:code:media-core/src/androidMain/kotlin/io/github/gycrosskit/media/AndroidFilePicker.kt | A:- | S:-
+AndroidImageSaveCommitTest.kt[TU5T]: F:验证相册发布必须精确更新一行，否则删除 pending URI | R:code:media-core/src/androidMain/kotlin/io/github/gycrosskit/media/AndroidImageSavePlatform.kt | A:- | S:-
+AndroidImageThumbnailTest.kt[TU4T]: F:在 Android Robolectric native graphics 执行跨端缩略图合同 | R:code:media-core/src/commonTest/kotlin/io/github/gycrosskit/media/ImageThumbnailTest.kt | A:- | S:-
+AndroidMediaThreadTest.kt[TU6M]: F:验证 Android 主线程权限、失败清理、相机隔离、旧/新格式验证与迟回执保护 | R:code:media-core/src/androidMain/kotlin/io/github/gycrosskit/media/AndroidImagePickerPlatform.kt,code:media-core/src/androidMain/kotlin/io/github/gycrosskit/media/AndroidImageSavePlatform.kt | A:- | S:-
+ImageByteLimitTest.kt[TU4T]: F:验证未声明输入长度时仅读到预算之外一字节即停止 | R:code:media-core/src/androidMain/kotlin/io/github/gycrosskit/media/AndroidImagePickerPlatform.kt | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-core/src/commonMain/kotlin/io/github/gycrosskit/media/===
+ImageContentPolicy.kt[LU7T]: F:定义跨端图片选择原始与输出编码及图片保存的 32MiB 边界 | R:code:media-core/src/commonMain/kotlin/io/github/gycrosskit/media/ImagePickerPlatform.kt,code:media-core/src/commonMain/kotlin/io/github/gycrosskit/media/ImageSavePlatform.kt | A:ImageContentPolicy | S:无效或超限保存要在权限和相册写入之前返回 INVALID_CONTENT
+ImagePickerPlatform.kt[LU8S]: F:定义相册和相机请求、可选 JPEG 压缩、图像快照及结果类型 | R:code:media-core/src/commonMain/kotlin/io/github/gycrosskit/media/ImageContentPolicy.kt,code:media-core/src/androidMain/kotlin/io/github/gycrosskit/media/AndroidImagePickerPlatform.kt | A:ImagePickerPlatform,ImagePickerRequest,ImagePickerResult,PickedImage | S:Android/iOS 替换等待；OHOS 原生 SDK 展示时可拒绝新请求；dispose 终态；按字节内容比较快照
+ImageSavePlatform.kt[LU7T]: F:声明保存系统相册的输入、权限分类和结果 | R:code:media-core/src/commonMain/kotlin/io/github/gycrosskit/media/ImageContentPolicy.kt,code:media-core/src/androidMain/kotlin/io/github/gycrosskit/media/AndroidImageSavePlatform.kt | A:ImageSavePlatform,ImageSaveRequest,ImageSaveResult | S:保留原编码；取消本地等待不能撤销已开始的原生写入
+ImageThumbnail.kt[LU7T]: F:生成有界 JPEG 预览，并统一跨端的降边长降质量顺序 | R:code:media-core/src/commonMain/kotlin/io/github/gycrosskit/media/ImageContentPolicy.kt,code:media-core/src/iosMain/kotlin/io/github/gycrosskit/media/ImageThumbnail.ios.kt | A:createImageThumbnail,ImageThumbnailPolicy | S:非法预算同步拒绝；无效输入和无法满足预算返回 null；取消继续抛出
+MediaPermissionState.kt[LI4T]: F:提供平台中立的 granted、denied、blocked 与 restricted 权限状态 | R:code:media-core/src/commonMain/kotlin/io/github/gycrosskit/media/ImageSavePlatform.kt | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-core/src/commonTest/kotlin/io/github/gycrosskit/media/===
+ImageThumbnailTest.kt[TU5T]: F:验证 JPEG 预览不改原图、输出预算及无效输入处理 | R:code:media-core/src/commonMain/kotlin/io/github/gycrosskit/media/ImageThumbnail.kt | A:- | S:-
+MainQueueDispatcher.kt[TQ4T]: F:提供可手动推进的 Main dispatcher，用于断言取消和迟回执顺序 | R:- | A:- | S:-
+MediaTest.kt[TU4T]: F:验证图片请求校验和快照按字节内容相等 | R:code:media-core/src/commonMain/kotlin/io/github/gycrosskit/media/ImagePickerPlatform.kt | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-core/src/iosMain/kotlin/io/github/gycrosskit/media/===
+ImageThumbnail.ios.kt[IU7T]: F:用 ImageIO 生成方向校正的 iOS 预览并在预算内编码 JPEG | R:code:media-core/src/commonMain/kotlin/io/github/gycrosskit/media/ImageThumbnail.kt | A:encodeImageThumbnail | S:后台运行且每轮检查取消；释放 CF 和 CG 对象
+IosImagePickerPlatform.kt[IU8S]: F:挂起接收 iOS bridge 的逐张图像和终结回执，维护 Main 请求 owner | R:code:media-core/src/iosMain/kotlin/io/github/gycrosskit/media/IosMediaSdkBridge.kt,code:media-core/src/commonMain/kotlin/io/github/gycrosskit/media/ImagePickerPlatform.kt | A:IosImagePickerPlatform.pick,IosImagePickerPlatform.dispose | S:先交接 owner 再取消旧协程；交付前在消费线程核对 dispose
+IosImageSavePlatform.kt[IU7T]: F:校验可保存字节后在 Main 调 Swift bridge 并恢复挂起等待 | R:code:media-core/src/iosMain/kotlin/io/github/gycrosskit/media/IosMediaSdkBridge.kt,code:media-core/src/commonMain/kotlin/io/github/gycrosskit/media/ImageSavePlatform.kt | A:IosImageSavePlatform.save | S:取消后忽略迟到回执；格式检测和 Photos 工作在 Swift
+IosMediaSdkBridge.kt[LU7T]: F:定义宿主 Swift 选图和保存 SDK 的参数、能力及回调 | R:code:iosApp/KmpMediaBridge.swift | A:IosMediaSdkBridge,IosImagePickerSdkCallback,IosImageSaveSdkCallback | S:-
+NSData.kt[IC4T]: F:在 Kotlin ByteArray 与 Foundation NSData 间复制拥有的字节 | R:code:media-core/src/iosMain/kotlin/io/github/gycrosskit/media/IosImageSavePlatform.kt | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-core/src/iosTest/kotlin/io/github/gycrosskit/media/===
+IosImagePickerThreadTest.kt[TU6S]: F:验证 iOS picker 替换、迟回执和 dispose 在 Main 与消费队列的次序 | R:code:media-core/src/iosMain/kotlin/io/github/gycrosskit/media/IosImagePickerPlatform.kt | A:- | S:-
+IosImageThumbnailTest.kt[TU4T]: F:以 iOS 平台实际编码器运行共用缩略图测试 | R:code:media-core/src/commonTest/kotlin/io/github/gycrosskit/media/ImageThumbnailTest.kt | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-core/src/nativeInterop/cinterop/===
+imageThumbnail.def[FV6T]: F:绑定 OHOS ImageSource、ImagePacker 与 PixelMap 的缩略图 ABI | R:code:media-core/build.gradle.kts | A:imageThumbnail | S:仅链接实际使用的 API12 库，保持未定义 API 保护
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-core/src/ohosArm64Main/kotlin/io/github/gycrosskit/media/===
+ImageThumbnail.ohos.kt[IU7T]: F:在 OHOS 后台按所需尺寸解码 PixelMap 并编码限额内 JPEG | R:code:media-core/src/nativeInterop/cinterop/imageThumbnail.def | A:encodeImageThumbnail | S:不先解整张大图；每轮检查取消并释放所有原生句柄
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-kuikly/===
+build.gradle.kts[FV6T]: F:发布 Kuikly 桥 KMP 变体，向消费者传递 media-core 和 Kuikly 公共类型 | R:code:media-core/build.gradle.kts,code:gradle/libs.versions.toml | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-kuikly/src/androidMain/kotlin/io/github/gycrosskit/media/kuikly/===
+AndroidMediaModule.kt[IU7T]: F:注册 Android Renderer 接收端，转发请求与销毁到该 Renderer 的 handler | R:code:media-kuikly/src/commonMain/kotlin/io/github/gycrosskit/media/kuikly/MediaModuleHandler.kt | A:AndroidMediaModule,registerMediaModule | S:保留宿主注入的 picker 和 saver，receiver 复用 handler owner
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-kuikly/src/commonMain/kotlin/io/github/gycrosskit/media/kuikly/===
+MediaModule.kt[EU9S]: F:实现页面侧 pick/save，解析 JSON/Base64 回执、取消和关闭请求 | R:code:media-kuikly/src/commonMain/kotlin/io/github/gycrosskit/media/kuikly/MediaModuleHandler.kt | A:MediaModule.pick,MediaModule.save,MediaModule.dispose | S:在解码分配前检查合计字节；回执 resume 排队后仍核对 dispose；finally 移除 callback
+MediaModuleHandler.kt[MN8S]: F:在 Main 协程把独立 requestId 的 pick/save 交给宿主媒体能力，并序列化单次结果 | R:code:media-kuikly/src/commonMain/kotlin/io/github/gycrosskit/media/kuikly/MediaModule.kt | A:MediaModuleHandler.call,MediaModuleHandler.dispose | S:销毁关闭本 Renderer scope；原图/压缩及权限合同来自宿主平台
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/media-kuikly/src/iosMain/kotlin/io/github/gycrosskit/media/kuikly/===
+IosMediaModuleHandler.kt[IU6T]: F:将 iOS Native Module 的闭包请求接到当前 Renderer 的 Kotlin handler | R:code:media-kuikly/src/commonMain/kotlin/io/github/gycrosskit/media/kuikly/MediaModuleHandler.kt,code:iosApp/Sources/GycMediaKuikly/GycMedia.swift | A:IosMediaModuleHandler.call,IosMediaModuleHandler.dispose | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/ohos/AppScope/===
+app.json5[FV3T]: F:声明 Harmony 工程应用标识、版本与应用资源引用 | R:code:ohos/build-profile.json5 | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/ohos/===
+build-profile.json5[FV6T]: F:配置 MediaNative 模块和 HarmonyOS 目标及兼容 API 22 | R:code:ohos/media/build-profile.json5 | A:- | S:-
+hvigorfile.ts[FV3T]: F:注册根工程的 Hvigor appTasks | R:code:ohos/media/hvigorfile.ts | A:- | S:-
+oh-package.json5[FV3T]: F:声明 Harmony 根工程的 OHPM 模型及依赖配置 | R:code:ohos/media/oh-package.json5 | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/ohos/hvigor/===
+hvigor-config.json5[FV3T]: F:声明工程 Hvigor 模型和基本执行配置 | R:code:ohos/hvigorfile.ts | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/ohos/media/===
+CHANGELOG.md[SV4T]: F:保存 Harmony 渠道版本与 raw 文件租约的 1.1.0 接入变更 | R:code:ohos/media/oh-package.json5,code:docs/接入指南.md | A:- | S:-
+Index.ets[EU6T]: F:导出图片 Module 及原始文件选择器、请求和租约回执 | R:code:ohos/media/src/main/ets/MediaModule.ets,code:ohos/media/src/main/ets/MediaFilePicker.ets | A:- | S:-
+LICENSE[SS2M]: F:随 HAR 分发 Apache 2.0 许可 | R:code:ohos/media/oh-package.json5 | A:- | S:-
+README.md[SU5T]: F:介绍私有 OHPM 精确版本、API22 和 Kuikly Module 注册入口 | R:code:ohos/media/Index.ets,code:ohos/media/oh-package.json5 | A:- | S:-
+build-profile.json5[FV3T]: F:声明 stageMode HAR 及 HarmonyOS 默认目标 | R:code:ohos/build-profile.json5 | A:- | S:-
+hvigorfile.ts[FV3T]: F:为 MediaNative 注册 Hvigor harTasks | R:code:ohos/hvigorfile.ts | A:- | S:-
+oh-package-lock.json5[FV5T]: F:固定 OHPM Renderer 解析到 2.30.0 和 libkuikly.so 的传递来源 | R:code:ohos/media/oh-package.json5 | A:- | S:生成文件，随真实安装结果重新生成
+oh-package.json5[FV6T]: F:定义 @gycrosskit/media 1.1.0、ArkTS 入口及 Kuikly Renderer 范围 | R:code:ohos/media/Index.ets,code:ohos/media/oh-package-lock.json5 | A:@gycrosskit/media | S:声明 ^2.29.1，与锁定的实际安装版本分别核对
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/ohos/media/src/main/ets/===
+MediaFilePicker.ets[IU9M]: F:按 MIME 和 capture 策略分派 OHOS 相册、相机和文件选择并返回原始 URI、元数据 | R:code:ohos/media/src/main/ets/MediaModule.ets,code:ohos/media/test/file-picker.test.cjs | A:MediaFilePicker.select,MediaFilePicker.revoke | S:默认10个且逐文件50MiB；request.valid 约束交付，清原生描述符和本次临时文件
+MediaModule.ets[IU9M]: F:接收 Kuikly 图片 pick/save/cancel，适配 raw picker 并处理编码和相册写入 | R:code:ohos/media/src/main/ets/MediaFilePicker.ets,code:ohos/media/test/media.test.cjs | A:MediaModule.call,MediaModule.onDestroy | S:按请求隔离代次和临时文件；保留旧无 ID 调用；原图/输出各受32MiB预算；取消不保证 SDK 可撤销
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/ohos/media/src/main/===
+module.json5[FV3T]: F:声明共享的 MediaNative HAR 及设备类型 | R:code:ohos/build-profile.json5 | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/ohos/media/test/===
+file-picker.test.cjs[TU6M]: F:执行真实 ArkTS raw picker 转译，验证路由、类型检查、授权状态和撤销后的清理 | R:code:ohos/media/src/main/ets/MediaFilePicker.ets | A:- | S:-
+media.test.cjs[TU6L]: F:用 SDK 替身验证图片 Module 的预算、编码、取消、权限和文件释放 | R:code:ohos/media/src/main/ets/MediaModule.ets | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/scripts/===
+build.sh[OV7T]: F:提供三端生产编译与 Maven/HAR 独立打包入口 | R:code:scripts/package-maven.sh,code:scripts/ci-build-kuikly-render.sh | A:compile,package | S:iOS 原生 SPM 与 Kuikly Pod 分别构建；操作不发布
+check-maven.py[TV6S]: F:检查本地 Maven 变体、产物可读性、JVM 字节码和校验摘要 | R:code:scripts/package-maven.sh,code:scripts/test-check-maven.py | A:check_sidecars,check_jvm_bytecode | S:-
+check-public-maven.py[TV6M]: F:核对精确发布提交对应的公开 Maven 变体、元数据和制品内容 | R:code:scripts/ci-release.sh | A:audit,ready_state | S:绑定完整 commit，独立消费者验收另行执行
+ci-build-kuikly-render.sh[OV6T]: F:从源码或精确 Git Tag 编译 iOS Renderer 和指定的 Module Pod | R:code:scripts/build.sh,code:GycMediaKuikly.podspec | A:- | S:-
+ci-java.security[FV3T]: F:设置 CI DNS 正向缓存期限，禁用负向缓存 | R:code:scripts/ci-repositories.gradle | A:- | S:-
+ci-release.sh[OV7T]: F:按不可变发布 Tag 装入冻结 Maven 归档，再核验公开制品 | R:code:jitpack-install.sh,code:scripts/check-public-maven.py | A:VERSION | S:发布源以 Tag commit 为准
+ci-repositories.gradle[FV5T]: F:按环境设置 Gradle 缓存与依赖 DNS 预热，确保行为测试实际执行 | R:code:scripts/build.sh,code:settings.gradle.kts | A:- | S:-
+jitpack-metadata.py[OV8S]: F:规范 JitPack 元数据并将 OHOS 缩略图 cinterop 发布成独立同版本依赖 | R:code:scripts/test-jitpack-metadata.py,code:scripts/package-maven.sh | A:normalize,image_thumbnail_publication | S:验证两个原 KLIB 的摘要与 ABI，保留二进制字节和真实 transitive 关系，避免 classifier URL 冲突
+package-maven.sh[OV6T]: F:运行 Gradle Maven 发布、元数据规范化与归档，输出版本候选 | R:code:release-pack.py,code:scripts/jitpack-metadata.py | A:VERSION | S:-
+test-check-maven.py[TV5S]: F:用归档 fixture 验证严格 Maven gate 对变体、制品与摘要的接受和拒绝 | R:code:scripts/check-maven.py | A:- | S:-
+test-jitpack-metadata.py[TV6M]: F:验证元数据裁剪与媒体 cinterop 的同版本、同字节和 ABI 发布合同 | R:code:scripts/jitpack-metadata.py | A:PublicationContracts,ImageThumbnailPublication | S:零字节资源同样拒绝，失败前保持所有原元数据
+verify-ios-picker.sh[TV6T]: F:编译原生 GycMedia 与 MOV fixture，在指定 iOS Simulator 执行 Picker 行为 | R:code:iosApp/Fixtures/CreateMovie.swift,code:iosApp/Tests/FilePickerCheck.swift | A:MEDIA_SIMULATOR | S:必须实际运行模拟器 App，并留 result 日志
+verify-kuikly-assembly.sh[TV6T]: F:生成当前源码的隔离 staging，构建消费者 KMP framework 并验证 Swift 装配 | R:code:verification-consumer/build.gradle.kts,code:GycMediaKuikly.podspec | A:- | S:-
+verify-kuikly-module.sh[TV6T]: F:将真实 Kuikly Module receiver 验收程序安装到模拟器运行，失败时收集回执 | R:code:iosApp/KuiklyTests/ModuleLifecycleCheck.swift | A:- | S:-
+verify.sh[TV5T]: F:运行媒体 Kotlin 编译测试并验证 Swift 原生模块和 KMP bridge 类型 | R:code:iosApp/KmpMediaBridge.swift,code:media-core/build.gradle.kts | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/tests/===
+test_jitpack_install.py[TV5S]: F:以模拟下载验证冻结归档来源、摘要、成员路径和安装结果 | R:code:jitpack-install.sh | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/verification-consumer/===
+NativeModuleAssembly.swift[TU5T]: F:类型检查实际 MediaConsumer framework 与 Swift GycMedia 接收端的装配 | R:code:verification-consumer/build.gradle.kts,code:iosApp/Sources/GycMediaKuikly/GycMedia.swift | A:configureMediaModule | S:-
+build.gradle.kts[TV7T]: F:定义三端隔离 Maven 消费者、Native frameworks 与指定版本接口探针 | R:code:verification-consumer/settings.gradle.kts,code:verification-consumer/NativeModuleAssembly.swift | A:mediaVersion,kuiklyRenderFrameworkDir | S:旧版本不具备 Android/iOS Kuikly 原生变体，按版本启用对应探针
+gradle.properties[FV3T]: F:设置隔离消费者的 Gradle 堆和 AndroidX | R:code:verification-consumer/build.gradle.kts | A:- | S:-
+settings.gradle.kts[FV6T]: F:把媒体坐标只绑定到指定候选 Maven 或公开 JitPack | R:code:verification-consumer/build.gradle.kts | A:mediaMavenRepo | S:指定仓库缺候选即失败，不得回退到其他来源
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/verification-consumer/src/androidMain/kotlin/===
+androidMainProbe.kt[TU4T]: F:编译验证 Android Picker 和保存能力可从宿主 Activity 装配 | R:code:verification-consumer/build.gradle.kts | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/verification-consumer/src/commonMain/kotlin/===
+Probe.kt[TU4T]: F:验证公共选取原图和保存图片的 Maven 消费 API | R:code:verification-consumer/build.gradle.kts | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/verification-consumer/src/iosMain/kotlin/===
+iosMainProbe.kt[TU4T]: F:验证 iOS 原生桥与 KMP Picker/Save 的构造合同 | R:code:verification-consumer/build.gradle.kts | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/verification-consumer/src/kuiklyNativeAndroidMain/kotlin/===
+NativeModuleProbe.kt[TU4T]: F:验证 Android Renderer 注册媒体模块的公开扩展可用 | R:code:verification-consumer/build.gradle.kts | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/verification-consumer/src/kuiklyNativeIosMain/kotlin/===
+NativeModuleProbe.kt[TU4T]: F:验证 iOS 媒体模块 handler 构造可用并供 Native 模块装配 | R:code:verification-consumer/NativeModuleAssembly.swift | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/verification-consumer/src/ohosArm64Main/kotlin/===
+ohosArm64MainProbe.kt[TU4T]: F:编译验证 OHOS Maven 变体公开 MediaModule | R:code:verification-consumer/build.gradle.kts | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/verification-kuikly/===
+build.gradle.kts[TQ6T]: F:独立 JVM 编译媒体生产传输源码和替身环境测试 | R:code:verification-kuikly/src/test/kotlin/KuiklyTransport.kt,code:verification-kuikly/src/test/kotlin/MediaModuleLifecycleTest.kt | A:- | S:排除需要三端实际 SDK 的缩略图 expect/actual
+settings.gradle.kts[FV4T]: F:配置独立 JVM 测试的同版 Kotlin fork 插件实现及依赖源 | R:code:verification-kuikly/build.gradle.kts | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/verification-kuikly/src/test/kotlin/===
+KuiklyJson.kt[TQ4T]: F:以 org.json 代替 Kuikly JSON，并记录数组对象读取以验证先限额 | R:code:verification-kuikly/src/test/kotlin/MediaModuleLifecycleTest.kt | A:- | S:-
+KuiklyTransport.kt[TQ4T]: F:捕获 Module 发送、异步取消和 callback 释放以断言 JVM 生命周期 | R:code:verification-kuikly/src/test/kotlin/MediaModuleLifecycleTest.kt | A:- | S:-
+MediaModuleHandlerTest.kt[TU6T]: F:验证接收端销毁、单请求取消、保存权限回执和参数拒绝 | R:code:media-kuikly/src/commonMain/kotlin/io/github/gycrosskit/media/kuikly/MediaModuleHandler.kt | A:- | S:-
+MediaModuleLifecycleTest.kt[TU6S]: F:验证发送端迟回执、请求取消、原编码恢复和恶意原生输入拒绝 | R:code:media-kuikly/src/commonMain/kotlin/io/github/gycrosskit/media/kuikly/MediaModule.kt | A:- | S:-
+
+===/Users/guoyang/.codex/worktrees/aoci-media/media/verification/ci/===
+test_cache_contract.py[TV4T]: F:断言编译缓存可选且行为测试必须执行的 Gradle 配置 | R:code:scripts/ci-repositories.gradle | A:- | S:-
+test_ios_picker_harness.py[TV5T]: F:用替身验证模拟器脚本保留 launch 失败码和 PASS 门禁 | R:code:scripts/verify-ios-picker.sh | A:- | S:-
+test_native_assembly.py[TV5T]: F:验证原生模块隔离装配脚本的参数和执行合同 | R:code:scripts/verify-kuikly-assembly.sh,code:verification-consumer/NativeModuleAssembly.swift | A:- | S:-

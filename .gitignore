@@ -12,3 +12,7 @@ BuildProfile.ets
 /scripts/ci-changes.py
 /scripts/ci-run.py
 /scripts/ci-native-cache.py
+
+# AOCI agent host integration (machine-bound; do not commit)
+.codex/config.toml
+.codex/config.toml.backup.*

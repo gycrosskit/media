@@ -43,19 +43,15 @@ class PublicationContracts(unittest.TestCase):
         self.assertEqual(self.variants(self.shared), [{"name": "metadataApiElements"}])
         self.assertEqual(metadata.normalize([self.native, self.shared]), 0)
 
-    def test_nonempty_resource_fails_before_any_write(self):
+    def test_archive_with_any_file_fails_before_any_write(self):
         before = {path: path.read_bytes() for path in (self.shared, self.native)}
-        with ZipFile(self.root / "resources.zip", "a") as zipped:
-            zipped.writestr("composeResources/image.png", b"image")
-        with self.assertRaisesRegex(ValueError, "Nonempty resources"):
-            metadata.normalize([self.shared, self.native])
-        self.assertEqual(before, {path: path.read_bytes() for path in before})
-
-    def test_zero_byte_real_file_also_requires_resource_publication(self):
-        with ZipFile(self.root / "resources.zip", "a") as zipped:
-            zipped.writestr("composeResources/empty.txt", b"")
-        with self.assertRaisesRegex(ValueError, "Nonempty resources"):
-            metadata.normalize([self.native, self.shared])
+        for payload, modules in ((b"image", [self.shared, self.native]), (b"", [self.native, self.shared])):
+            with self.subTest(size=len(payload)):
+                with ZipFile(self.root / "resources.zip", "w") as zipped:
+                    zipped.writestr("composeResources/file", payload)
+                with self.assertRaisesRegex(ValueError, "Nonempty resources"):
+                    metadata.normalize(modules)
+                self.assertEqual(before, {path: path.read_bytes() for path in before})
 
     def test_missing_resource_target_fails_without_write(self):
         before = self.shared.read_bytes()
